@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIFA World Cup 2026 — Auction Tracker</title>
+<script src="config.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0b0d14;
+    --surface:  #13151f;
+    --surface2: #1a1d2a;
+    --border:   rgba(255,255,255,0.07);
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --gold:     #f59e0b;
+    --green:    #22c55e;
+    --red:      #ef4444;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .header-left h1 { font-size: 18px; font-weight: 700; color: #fff; }
+  .header-left p  { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .refresh-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+  .refresh-btn:hover { background: #252838; }
+  .refresh-btn.spinning svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Status bar ── */
+  #status-bar {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 20px;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .status-dot.live  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.error { background: var(--red); }
+
+  /* ── Main layout ── */
+  main { padding: 20px; max-width: 900px; margin: 0 auto; }
+
+  /* ── Leaderboard ── */
+  .leaderboard { margin-bottom: 28px; }
+  .section-title { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+
+  .lb-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+  }
+  .lb-row:hover { border-color: rgba(255,255,255,0.14); }
+  .lb-row.rank-1 { border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.04); }
+  .lb-row.rank-2 { border-color: rgba(148,163,184,0.3); }
+  .lb-row.rank-3 { border-color: rgba(180,120,60,0.3); }
+
+  .lb-rank { font-size: 14px; font-weight: 700; color: var(--muted); text-align: center; }
+  .lb-rank.r1 { color: var(--gold); }
+  .lb-rank.r2 { color: #94a3b8; }
+  .lb-rank.r3 { color: #b4783c; }
+
+  .lb-player-name { font-size: 15px; font-weight: 600; color: #fff; }
+  .lb-team-pills  { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .lb-pill {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 99px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .lb-pill.eliminated { opacity: 0.35; text-decoration: line-through; }
+  .lb-pill.active     { opacity: 1; }
+
+  .lb-breakdown { text-align: right; font-size: 11px; color: var(--muted); }
+  .lb-points { font-size: 22px; font-weight: 800; color: #fff; text-align: right; }
+  .lb-points span { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+  /* ── Team grid ── */
+  .team-grid-section { margin-bottom: 28px; }
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+  .team-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .team-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .team-flag { font-size: 20px; margin-right: 8px; }
+  .team-card-name { font-size: 14px; font-weight: 600; color: #fff; }
+  .team-card-owner { font-size: 11px; color: var(--muted); }
+  .team-stage-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 99px;
+    background: var(--surface2);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .team-stage-badge.in-progress { background: rgba(34,197,94,0.12); color: #4ade80; }
+  .team-stage-badge.eliminated  { background: rgba(239,68,68,0.1);  color: #f87171; }
+  .team-pts-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+  .team-pts-val { font-weight: 700; color: var(--text); }
+
+  /* ── Tier legend ── */
+  .tier-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+  }
+  .t1 { background: rgba(248,113,113,0.15); color: #f87171; }
+  .t2 { background: rgba(96,165,250,0.15);  color: #60a5fa; }
+  .t3 { background: rgba(74,222,128,0.15);  color: #4ade80; }
+  .t4 { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn.active {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Setup warning ── */
+  .setup-banner {
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #fcd34d;
+    line-height: 1.6;
+  }
+  .setup-banner strong { color: var(--gold); }
+  .setup-banner code {
+    background: rgba(0,0,0,0.3);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  /* ── Last updated ── */
+  #last-updated { font-size: 11px; color: var(--muted); }
+
+  /* ── Responsive ── */
+  @media (max-width: 540px) {
+    main { padding: 14px; }
+    .lb-row { grid-template-columns: 24px 1fr auto; gap: 8px; }
+    .lb-breakdown { display: none; }
+    .team-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>⚽ World Cup 2026 Tracker</h1>
+    <p id="last-updated">Not yet loaded</p>
+  </div>
+  <button class="refresh-btn" id="refresh-btn" onclick="loadData()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+      <path d="M3 3v5h5"/>
+    </svg>
+    Refresh
+  </button>
+</header>
+
+<div id="status-bar">
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-text">Initialising…</span>
+</div>
+
+<main>
+  <div id="setup-warning"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('leaderboard', this)">Leaderboard</button>
+    <button class="tab-btn" onclick="switchTab('teams', this)">All Teams</button>
+    <button class="tab-btn" onclick="switchTab('scoring', this)">Scoring</button>
+  </div>
+
+  <!-- Leaderboard tab -->
+  <div class="tab-panel active" id="tab-leaderboard">
+    <div class="leaderboard">
+      <div class="section-title">Overall standings</div>
+      <div id="leaderboard-list">
+        <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- All teams tab -->
+  <div class="tab-panel" id="tab-teams">
+    <div class="team-grid-section">
+      <div class="section-title">All 48 teams</div>
+      <div class="team-grid" id="team-grid">
+        <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scoring reference tab -->
+  <div class="tab-panel" id="tab-scoring">
+    <div class="section-title">Scoring rules</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:var(--surface2);">
+            <th style="padding:10px 16px;text-align:left;color:var(--muted);font-weight:500;">Stage</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--muted);font-weight:500;">Points</th>
+          </tr>
+        </thead>
+        <tbody id="scoring-table-body"></tbody>
+      </table>
+    </div>
+    <div class="section-title">Underdog bonus</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:var(--surface2);">
+            <th style="padding:10px 16px;text-align:left;color:var(--muted);font-weight:500;">Tier gap</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--muted);font-weight:500;">Win</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--muted);font-weight:500;">Draw (groups only)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-top:1px solid var(--border);">
+            <td style="padding:10px 16px;">1 tier</td>
+            <td style="padding:10px 16px;text-align:right;">+2</td>
+            <td style="padding:10px 16px;text-align:right;">+1</td>
+          </tr>
+          <tr style="border-top:1px solid var(--border);">
+            <td style="padding:10px 16px;">2 tiers</td>
+            <td style="padding:10px 16px;text-align:right;">+4</td>
+            <td style="padding:10px 16px;text-align:right;">+2</td>
+          </tr>
+          <tr style="border-top:1px solid var(--border);">
+            <td style="padding:10px 16px;">3 tiers</td>
+            <td style="padding:10px 16px;text-align:right;">+6</td>
+            <td style="padding:10px 16px;text-align:right;">+3</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;color:var(--muted);line-height:1.7;">
+      Stage points are based on the furthest round a team reaches — not accumulated per round.<br>
+      Underdog bonuses are earned per match result and accumulate across the tournament.
+    </p>
+  </div>
+</main>
+
+<script>
+// ── State ────────────────────────────────────────────────────
+const state = {
+  teamData: {},      // name → { stage, tier, standing, fixtures }
+  lastFetched: null,
+  error: null,
+};
+
+// ── Helpers ──────────────────────────────────────────────────
+
+// Map API-Football round strings → our stage names
+function normaliseRound(round) {
+  if (!round) return "Group Stage";
+  const r = round.toLowerCase();
+  if (r.includes("group"))           return "Group Stage";
+  if (r.includes("round of 32") || r.includes("2nd round") || r.includes("round of 32")) return "Round of 32";
+  if (r.includes("round of 16") || r.includes("1st round knockout")) return "Round of 16";
+  if (r.includes("quarter"))         return "Quarter-finals";
+  if (r.includes("semi"))            return "Semi-finals";
+  if (r.includes("final"))           return r.includes("3rd") ? "Semi-finals" : "2nd Place";
+  return "Group Stage";
+}
+
+function stagePoints(stage) {
+  return CONFIG.STAGE_POINTS[stage] ?? 0;
+}
+
+// Determine the tier of a team name from CONFIG
+function getTier(teamName) {
+  for (const p of CONFIG.PLAYERS) {
+    const found = p.teams.find(t => normaliseTeamName(t.name) === normaliseTeamName(teamName));
+    if (found) return found.tier;
+  }
+  return null;
+}
+
+function normaliseTeamName(name) {
+  return name.toLowerCase().trim()
+    .replace(/&/g, "and")
+    .replace(/\s+/g, " ");
+}
+
+// ── API fetch ────────────────────────────────────────────────
+
+async function fetchStandings() {
+  const url = `https://v3.football.api-sports.io/standings?league=1&season=2026`;
+  const res = await fetch(url, {
+    headers: {
+      "x-apisports-key": CONFIG.API_KEY,
+    }
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  const json = await res.json();
+  if (json.errors && Object.keys(json.errors).length > 0) {
+    const msg = Object.values(json.errors)[0];
+    throw new Error(msg);
+  }
+  return json;
+}
+
+async function fetchFixtures() {
+  const url = `https://v3.football.api-sports.io/fixtures?league=1&season=2026`;
+  const res = await fetch(url, {
+    headers: { "x-apisports-key": CONFIG.API_KEY }
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  const json = await res.json();
+  if (json.errors && Object.keys(json.errors).length > 0) {
+    const msg = Object.values(json.errors)[0];
+    throw new Error(msg);
+  }
+  return json;
+}
+
+// ── Data processing ──────────────────────────────────────────
+
+function processData(standingsJson, fixturesJson) {
+  const teamMap = {}; // normalisedName → { stage, apiName, played, wins, draws, losses }
+
+  // Build from standings (group stage data)
+  const groups = standingsJson?.response?.[0]?.league?.standings ?? [];
+  for (const group of groups) {
+    for (const entry of group) {
+      const apiName = entry.team.name;
+      const norm    = normaliseTeamName(apiName);
+      teamMap[norm] = {
+        apiName,
+        stage: "Group Stage",
+        played: entry.all?.played ?? 0,
+        wins:   entry.all?.win    ?? 0,
+        draws:  entry.all?.draw   ?? 0,
+        losses: entry.all?.lose   ?? 0,
+        goalsFor:     entry.all?.goals?.for     ?? 0,
+        goalsAgainst: entry.all?.goals?.against ?? 0,
+        groupPoints:  entry.points ?? 0,
+        rank:         entry.rank   ?? 0,
+      };
+    }
+  }
+
+  // Build fixture map for underdog bonus calculation
+  const fixtureList = fixturesJson?.response ?? [];
+  const teamFixtures = {}; // normName → [{ opponent, result, round, isGroupStage }]
+
+  for (const f of fixtureList) {
+    const status = f.fixture.status.short;
+    const finished = ["FT","AET","PEN"].includes(status);
+    if (!finished) continue;
+
+    const homeNorm = normaliseTeamName(f.teams.home.name);
+    const awayNorm = normaliseTeamName(f.teams.away.name);
+    const homeGoals = f.goals.home;
+    const awayGoals = f.goals.away;
+    const round     = f.league.round ?? "";
+    const isGroup   = round.toLowerCase().includes("group");
+
+    const homeResult = homeGoals > awayGoals ? "W" : homeGoals < awayGoals ? "L" : "D";
+    const awayResult = homeResult === "W" ? "L" : homeResult === "L" ? "W" : "D";
+
+    if (!teamFixtures[homeNorm]) teamFixtures[homeNorm] = [];
+    if (!teamFixtures[awayNorm]) teamFixtures[awayNorm] = [];
+
+    teamFixtures[homeNorm].push({ opponentNorm: awayNorm, result: homeResult, round, isGroup });
+    teamFixtures[awayNorm].push({ opponentNorm: homeNorm, result: awayResult, round, isGroup });
+
+    // Update stage for knockout rounds
+    const stage = normaliseRound(round);
+    if (stage !== "Group Stage") {
+      // The team that wins a knockout match advances; loser is set if not already deeper
+      const STAGE_ORDER = ["Group Stage","Round of 32","Round of 16","Quarter-finals","Semi-finals","2nd Place","Winner"];
+      const advancer = homeResult === "W" ? homeNorm : awayNorm;
+      const loser    = homeResult === "W" ? awayNorm : homeNorm;
+
+      if (!teamMap[advancer]) teamMap[advancer] = { stage: "Group Stage" };
+      if (!teamMap[loser])    teamMap[loser]    = { stage: "Group Stage" };
+
+      const advStage = nextStage(stage);
+      if (STAGE_ORDER.indexOf(advStage) > STAGE_ORDER.indexOf(teamMap[advancer].stage)) {
+        teamMap[advancer].stage = advStage;
+      }
+      if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(teamMap[loser].stage)) {
+        teamMap[loser].stage = stage;
+      }
+    }
+  }
+
+  // Determine final stage for each team (the deepest stage they've reached in knockout)
+  // For now, group-stage exits stay as "Group Stage" (will be resolved at end of group stage)
+
+  return { teamMap, teamFixtures };
+}
+
+function nextStage(stage) {
+  const order = ["Group Stage","Round of 32","Round of 16","Quarter-finals","Semi-finals","2nd Place","Winner"];
+  const idx = order.indexOf(stage);
+  return idx >= 0 && idx < order.length - 1 ? order[idx + 1] : stage;
+}
+
+// ── Underdog bonus calculation ────────────────────────────────
+
+function calcUnderdogBonus(playerTeams, teamFixtures) {
+  let bonus = 0;
+  const details = [];
+
+  for (const myTeam of playerTeams) {
+    const myNorm = normaliseTeamName(myTeam.name);
+    const myTier = myTeam.tier;
+    const fixtures = teamFixtures[myNorm] ?? [];
+
+    for (const f of fixtures) {
+      const oppTier = getTier(f.opponentNorm);
+      if (!oppTier) continue; // opponent not in our game
+
+      const tierDiff = oppTier - myTier; // positive = we're the underdog
+      if (tierDiff <= 0) continue;       // no underdog bonus if we're the favourite
+
+      const bonusConfig = CONFIG.UNDERDOG_BONUS[tierDiff];
+      if (!bonusConfig) continue;
+
+      if (f.result === "W") {
+        bonus += bonusConfig.win;
+        details.push(`+${bonusConfig.win} (${myTeam.name} beat T${oppTier} team)`);
+      } else if (f.result === "D" && f.isGroup) {
+        bonus += bonusConfig.draw;
+        details.push(`+${bonusConfig.draw} (${myTeam.name} drew T${oppTier} team)`);
+      }
+    }
+  }
+
+  return { bonus, details };
+}
+
+// ── Score calculation ─────────────────────────────────────────
+
+function calcPlayerScore(player, teamMap, teamFixtures) {
+  let stageTotal   = 0;
+  let underdogTotal = 0;
+  const teamBreakdown = [];
+
+  for (const t of player.teams) {
+    const norm  = normaliseTeamName(t.name);
+    const data  = teamMap[norm];
+    const stage = data?.stage ?? "Group Stage";
+    const pts   = stagePoints(stage);
+    stageTotal += pts;
+
+    teamBreakdown.push({
+      name:  t.name,
+      tier:  t.tier,
+      stage,
+      pts,
+      active: stage !== "Group Stage" || (data?.played ?? 0) < 3,
+    });
+  }
+
+  const { bonus, details } = calcUnderdogBonus(player.teams, teamFixtures);
+  underdogTotal = bonus;
+
+  return {
+    name:      player.name,
+    color:     player.color,
+    total:     stageTotal + underdogTotal,
+    stageTotal,
+    underdogTotal,
+    teams:     teamBreakdown,
+    details,
+  };
+}
+
+// ── Render ────────────────────────────────────────────────────
+
+function renderLeaderboard(scores) {
+  const sorted = [...scores].sort((a, b) => b.total - a.total);
+  const el = document.getElementById("leaderboard-list");
+
+  el.innerHTML = sorted.map((p, i) => {
+    const rank    = i + 1;
+    const rankCls = rank <= 3 ? `r${rank}` : "";
+    const rowCls  = rank <= 3 ? `rank-${rank}` : "";
+
+    const pills = p.teams.map(t => {
+      const elim = t.stage === "Group Stage" && !t.active;
+      return `<span class="lb-pill ${elim ? 'eliminated' : 'active'}" style="background:${hexWithAlpha(p.color, 0.1)};color:${p.color};border-color:${hexWithAlpha(p.color, 0.25)}">
+        ${t.name}<span class="tier-badge t${t.tier}">${t.tier}</span>
+      </span>`;
+    }).join("");
+
+    return `
+    <div class="lb-row ${rowCls}">
+      <div class="lb-rank ${rankCls}">${rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank}</div>
+      <div>
+        <div class="lb-player-name" style="color:${p.color}">${p.name}</div>
+        <div class="lb-team-pills">${pills}</div>
+      </div>
+      <div>
+        <div class="lb-breakdown">Stage: ${p.stageTotal}pts</div>
+        <div class="lb-breakdown">Underdog: +${p.underdogTotal}pts</div>
+      </div>
+      <div>
+        <div class="lb-points">${p.total}<span>pts</span></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderTeamGrid(scores, teamMap) {
+  const el = document.getElementById("team-grid");
+
+  // Flatten all teams with owner info
+  const allTeams = [];
+  for (const p of scores) {
+    for (const t of p.teams) {
+      const norm = normaliseTeamName(t.name);
+      const data = teamMap[norm] ?? {};
+      allTeams.push({
+        name:    t.name,
+        tier:    t.tier,
+        owner:   p.name,
+        color:   p.color,
+        stage:   t.stage,
+        pts:     t.pts,
+        played:  data.played ?? 0,
+        wins:    data.wins   ?? 0,
+        draws:   data.draws  ?? 0,
+        losses:  data.losses ?? 0,
+      });
+    }
+  }
+
+  allTeams.sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
+
+  el.innerHTML = allTeams.map(t => {
+    const isElim     = t.stage === "Group Stage" && t.played >= 3;
+    const stageCls   = isElim ? "eliminated" : t.pts > 0 ? "in-progress" : "";
+    const stageLabel = isElim ? "Eliminated" : t.stage;
+    const record     = t.played > 0 ? `${t.wins}W ${t.draws}D ${t.losses}L` : "Not started";
+
+    return `
+    <div class="team-card">
+      <div class="team-card-header">
+        <div>
+          <div class="team-card-name">${t.name}<span class="tier-badge t${t.tier}">T${t.tier}</span></div>
+          <div class="team-card-owner" style="color:${t.color}">${t.owner}</div>
+        </div>
+        <div class="team-stage-badge ${stageCls}">${stageLabel}</div>
+      </div>
+      <div class="team-pts-row">
+        <span>${record}</span>
+        <span class="team-pts-val">${t.pts} pts</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderScoringTable() {
+  const tbody = document.getElementById("scoring-table-body");
+  tbody.innerHTML = Object.entries(CONFIG.STAGE_POINTS).map(([stage, pts], i) => `
+    <tr style="border-top:${i > 0 ? '1px solid var(--border)' : 'none'}">
+      <td style="padding:10px 16px;">${stage}</td>
+      <td style="padding:10px 16px;text-align:right;font-weight:600;">${pts}</td>
+    </tr>`).join("");
+}
+
+function setStatus(type, text) {
+  document.getElementById("status-dot").className  = `status-dot ${type}`;
+  document.getElementById("status-text").textContent = text;
+}
+
+function hexWithAlpha(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function showSetupWarning(msg) {
+  document.getElementById("setup-warning").innerHTML = `
+    <div class="setup-banner">
+      <strong>Setup needed:</strong> ${msg}
+    </div>`;
+}
+
+// ── Main load ─────────────────────────────────────────────────
+
+async function loadData() {
+  document.getElementById("setup-warning").innerHTML = "";
+  const btn = document.getElementById("refresh-btn");
+  btn.classList.add("spinning");
+  setStatus("", "Fetching data…");
+
+  // Check for placeholder API key
+  if (!CONFIG.API_KEY || CONFIG.API_KEY === "YOUR_API_KEY_HERE") {
+    showSetupWarning(`Add your API-Football key to <code>config.js</code> — replace <code>YOUR_API_KEY_HERE</code> with your key from <a href="https://dashboard.api-football.com" target="_blank" style="color:#fbbf24">dashboard.api-football.com</a>`);
+    setStatus("error", "API key not configured");
+    btn.classList.remove("spinning");
+    useDemoData();
+    return;
+  }
+
+  try {
+    const [standingsJson, fixturesJson] = await Promise.all([
+      fetchStandings(),
+      fetchFixtures(),
+    ]);
+
+    const { teamMap, teamFixtures } = processData(standingsJson, fixturesJson);
+    const scores = CONFIG.PLAYERS.map(p => calcPlayerScore(p, teamMap, teamFixtures));
+
+    renderLeaderboard(scores);
+    renderTeamGrid(scores, teamMap);
+
+    state.lastFetched = new Date();
+    document.getElementById("last-updated").textContent = `Updated ${state.lastFetched.toLocaleTimeString()}`;
+    setStatus("live", `Live · ${fixturesJson.response?.filter(f => f.fixture.status.short === "1H" || f.fixture.status.short === "2H").length ?? 0} matches in progress`);
+
+  } catch (err) {
+    console.error(err);
+    setStatus("error", `Error: ${err.message}`);
+    showSetupWarning(`Could not load data: <strong>${err.message}</strong>. Check your API key and try again.`);
+    useDemoData();
+  }
+
+  btn.classList.remove("spinning");
+}
+
+// Demo/placeholder render when no API key is set
+function useDemoData() {
+  const demoTeamMap = {};
+  const demoFixtures = {};
+
+  // Give teams a fake stage so the UI renders properly
+  for (const p of CONFIG.PLAYERS) {
+    for (const t of p.teams) {
+      demoTeamMap[normaliseTeamName(t.name)] = {
+        stage: "Group Stage",
+        played: 0, wins: 0, draws: 0, losses: 0,
+        apiName: t.name,
+      };
+    }
+  }
+
+  const scores = CONFIG.PLAYERS.map(p => calcPlayerScore(p, demoTeamMap, demoFixtures));
+  renderLeaderboard(scores);
+  renderTeamGrid(scores, demoTeamMap);
+  renderScoringTable();
+  document.getElementById("last-updated").textContent = "Demo mode — add API key to go live";
+}
+
+// ── Tab switching ─────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  btn.classList.add("active");
+}
+
+// ── Auto-refresh every 5 minutes ──────────────────────────────
+setInterval(loadData, 60 * 60 * 1000);
+
+// ── Init ──────────────────────────────────────────────────────
+renderScoringTable();
+loadData();
+</script>
+</body>
+</html>
