@@ -688,14 +688,7 @@ async function loadData() {
   btn.classList.add("spinning");
   setStatus("", "Fetching data…");
 
-  // Check for placeholder API key
-  if (!CONFIG.API_KEY || CONFIG.API_KEY === "YOUR_API_KEY_HERE") {
-    showSetupWarning(`Add your API-Football key to <code>config.js</code> — replace <code>YOUR_API_KEY_HERE</code> with your key from <a href="https://dashboard.api-football.com" target="_blank" style="color:#fbbf24">dashboard.api-football.com</a>`);
-    setStatus("error", "API key not configured");
-    btn.classList.remove("spinning");
-    useDemoData();
-    return;
-  }
+
 
   try {
     const [standingsJson, fixturesJson] = await Promise.all([
