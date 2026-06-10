@@ -669,7 +669,7 @@ const FLAG_FILE = {
   "bosnia and herzegovina":"Flag_of_Bosnia_and_Herzegovina",
   "brazil":"Flag_of_Brazil","canada":"Flag_of_Canada",
   "cape verde":"Flag_of_Cape_Verde","colombia":"Flag_of_Colombia",
-  "croatia":"Flag_of_Croatia","curaçao":"Flag_of_Curaçao",
+  "croatia":"Flag_of_Croatia","curaçao":"Flag_of_Curacao",
   "czechia":"Flag_of_Czech_Republic","czech republic":"Flag_of_Czech_Republic",
   "congo dr":"Flag_of_Democratic_Republic_of_Congo",
   "democratic republic of congo":"Flag_of_Democratic_Republic_of_Congo",
@@ -715,6 +715,14 @@ function findOwner(normTeamName) {
   return null;
 }
 
+function findTeamInfo(normTeamName) {
+  for (const p of CONFIG.PLAYERS) {
+    const entry = p.teams.find(t => normaliseTeamName(t.name) === normTeamName);
+    if (entry) return { owner: { name: p.name, color: p.color }, tier: entry.tier };
+  }
+  return null;
+}
+
 function renderUpcoming(fixturesJson) {
   const el = document.getElementById("upcoming-list");
 
@@ -742,8 +750,12 @@ function renderUpcoming(fixturesJson) {
         const home       = comp?.competitors?.find(c => c.homeAway === "home");
         const away       = comp?.competitors?.find(c => c.homeAway === "away");
         if (!home || !away) return "";
-        const homeOwner  = findOwner(normaliseTeamName(home.team.displayName));
-        const awayOwner  = findOwner(normaliseTeamName(away.team.displayName));
+        const homeInfo   = findTeamInfo(normaliseTeamName(home.team.displayName));
+        const awayInfo   = findTeamInfo(normaliseTeamName(away.team.displayName));
+        const homeOwner  = homeInfo?.owner ?? null;
+        const awayOwner  = awayInfo?.owner ?? null;
+        const homeTier   = homeInfo?.tier ?? null;
+        const awayTier   = awayInfo?.tier ?? null;
         const isRelevant = homeOwner || awayOwner;
         const isLive     = event.status?.type?.state === "in";
         const time       = new Date(event.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -760,13 +772,15 @@ function renderUpcoming(fixturesJson) {
         return `
         <div style="background:var(--surface);border:1px solid ${isRelevant ? "rgba(255,255,255,0.13)" : "var(--border)"};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:12px;">
-            <div style="flex:1;text-align:right;">
-              <div style="font-size:14px;font-weight:600;color:${homeOwner ? homeOwner.color : "var(--text)"};">${home.team.displayName} ${homeFlag}</div>
+            <div style="flex:1;text-align:center;">
+              <div style="font-size:14px;">${homeTier != null ? `<div style="display:inline-block;margin-right:3px;font-size:10px;font-weight:600;color:var(--muted);background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">T${homeTier}</div>` : ""}
+<span style="font-weight:600;color:${homeOwner ? homeOwner.color : "var(--text)"};">${home.team.displayName} ${homeFlag}</span></div>
               ${homeOwner ? `<div style="font-size:11px;color:${homeOwner.color};opacity:0.75;">${homeOwner.name}</div>` : ""}
             </div>
             <div style="font-size:12px;color:var(--muted);flex-shrink:0;width:28px;text-align:center;">vs</div>
-            <div style="flex:1;">
-              <div style="font-size:14px;font-weight:600;color:${awayOwner ? awayOwner.color : "var(--text)"};">${awayFlag} ${away.team.displayName}</div>
+            <div style="flex:1; text-align:center;">
+              <div style="font-size:14px;font-weight:600;"><span style="margin-right:3px;color:${awayOwner ? awayOwner.color : "var(--text)"};">${awayFlag} ${away.team.displayName}</span>${awayTier != null ? `<div style="display:inline-block;margin-left:3px;font-size:10px;font-weight:600;color:var(--muted);background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">T${awayTier}</div>` : ""}
+</div>
               ${awayOwner ? `<div style="font-size:11px;color:${awayOwner.color};opacity:0.75;">${awayOwner.name}</div>` : ""}
             </div>
             <div style="text-align:right;flex-shrink:0;min-width:52px;">
@@ -776,6 +790,20 @@ function renderUpcoming(fixturesJson) {
               <div style="font-size:10px;color:var(--muted);margin-top:2px;">${round}</div>
             </div>
           </div>
+          ${(() => {
+            if (homeTier == null || awayTier == null) return "";
+            const diff = Math.abs(homeTier - awayTier);
+            if (diff === 0) return "";
+            const bonus = CONFIG.UNDERDOG_BONUS[diff];
+            if (!bonus) return "";
+            const underdogIsHome = homeTier > awayTier;
+            const underdogOwner = underdogIsHome ? homeOwner : awayOwner;
+            const underdogName = underdogIsHome ? (home.team.shortDisplayName || home.team.displayName) : (away.team.shortDisplayName || away.team.displayName);
+            const ownerLabel = underdogOwner ? ` <span style="color:${underdogOwner.color};">(${underdogOwner.name})</span>` : "";
+            return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);">
+              <span style="font-weight:600;color:var(--text);">${underdogName}</span>${ownerLabel}<span>underdog &mdash; win: <span style="color:var(--gold);font-weight:700;">+${bonus.win}pts</span>&nbsp;&nbsp;draw: <span style="color:var(--text);font-weight:600;">+${bonus.draw}pts</span></span>
+            </div>`;
+          })()}
           ${hasOdds ? `
           <div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
             <div style="flex:1;background:var(--surface2);border-radius:6px;padding:5px 8px;text-align:center;">
