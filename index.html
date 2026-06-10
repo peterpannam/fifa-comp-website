@@ -265,8 +265,8 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('leaderboard', this)">Leaderboard</button>
     <button class="tab-btn" onclick="switchTab('teams', this)">All Teams</button>
-    <button class="tab-btn" onclick="switchTab('scoring', this)">Scoring</button>
     <button class="tab-btn" onclick="switchTab('upcoming', this)">Upcoming</button>
+    <button class="tab-btn" onclick="switchTab('scoring', this)">Scoring</button>
   </div>
 
   <!-- Leaderboard tab -->
@@ -627,7 +627,7 @@ function renderTeamGrid(scores, teamMap) {
     <div class="team-card">
       <div class="team-card-header">
         <div>
-          <div class="team-card-name">${t.name}<span class="tier-badge t${t.tier}">T${t.tier}</span></div>
+          <div class="team-card-name">${flagImg(t.name)}${t.name}<span class="tier-badge t${t.tier}">T${t.tier}</span></div>
           <div class="team-card-owner" style="color:${t.color}">${t.owner}</div>
         </div>
         <div class="team-stage-badge ${stageCls}">${stageLabel}</div>
@@ -665,18 +665,18 @@ const FLAG_FILE = {
   "algeria":"Flag_of_Algeria","argentina":"Flag_of_Argentina",
   "australia":"Flag_of_Australia","austria":"Flag_of_Austria",
   "belgium":"Flag_of_Belgium",
-  "bosnia & herzegovina":"Flag_of_Bosnia_and_Herzegovina",
+  "bosnia-herzegovina":"Flag_of_Bosnia_and_Herzegovina",
   "bosnia and herzegovina":"Flag_of_Bosnia_and_Herzegovina",
   "brazil":"Flag_of_Brazil","canada":"Flag_of_Canada",
   "cape verde":"Flag_of_Cape_Verde","colombia":"Flag_of_Colombia",
-  "croatia":"Flag_of_Croatia","curacao":"Flag_of_Curaçao",
+  "croatia":"Flag_of_Croatia","curaçao":"Flag_of_Curaçao",
   "czechia":"Flag_of_Czech_Republic","czech republic":"Flag_of_Czech_Republic",
-  "dr congo":"Flag_of_Democratic_Republic_of_Congo",
+  "congo dr":"Flag_of_Democratic_Republic_of_Congo",
   "democratic republic of congo":"Flag_of_Democratic_Republic_of_Congo",
   "ecuador":"Flag_of_Ecuador","egypt":"Flag_of_Egypt",
   "england":"Flag_of_England","france":"Flag_of_France",
   "germany":"Flag_of_Germany","ghana":"Flag_of_Ghana",
-  "haiti":"Flag_of_Haiti","iran":"Flag_of_Iran",
+  "haiti":"Flag_of_Haiti","iran":"Flag_of_Iran","iraq":"Flag_of_Iraq",
   "ivory coast":"Flag_of_Ivory_Coast","cote d'ivoire":"Flag_of_Ivory_Coast",
   "japan":"Flag_of_Japan","jordan":"Flag_of_Jordan",
   "mexico":"Flag_of_Mexico","morocco":"Flag_of_Morocco",
@@ -689,7 +689,7 @@ const FLAG_FILE = {
   "south korea":"Flag_of_South_Korea","korea republic":"Flag_of_South_Korea",
   "spain":"Flag_of_Spain","sweden":"Flag_of_Sweden",
   "switzerland":"Flag_of_Switzerland","tunisia":"Flag_of_Tunisia",
-  "turkiye":"Flag_of_Turkey","turkey":"Flag_of_Turkey",
+  "türkiye":"Flag_of_Turkey","turkey":"Flag_of_Turkey",
   "united states":"Flag_of_United_States","usa":"Flag_of_United_States",
   "uruguay":"Flag_of_Uruguay","uzbekistan":"Flag_of_Uzbekistan",
 };
