@@ -23,10 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inject API key
-        run: |
-          sed -i "s/YOUR_API_KEY_HERE/${{ secrets.API_FOOTBALL_KEY }}/g" config.js
-
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

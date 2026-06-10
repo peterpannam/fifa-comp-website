@@ -383,75 +383,61 @@ function normaliseTeamName(name) {
 // ── API fetch ────────────────────────────────────────────────
 
 async function fetchStandings() {
-  const url = `https://v3.football.api-sports.io/standings?league=1&season=2026`;
-  const res = await fetch(url, {
-    headers: {
-      "x-apisports-key": CONFIG.API_KEY,
-    }
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  const json = await res.json();
-  if (json.errors && Object.keys(json.errors).length > 0) {
-    const msg = Object.values(json.errors)[0];
-    throw new Error(msg);
-  }
-  return json;
+  const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/standings`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`ESPN standings error ${res.status}`);
+  return res.json();
 }
 
 async function fetchFixtures() {
-  const url = `https://v3.football.api-sports.io/fixtures?league=1&season=2026`;
-  const res = await fetch(url, {
-    headers: { "x-apisports-key": CONFIG.API_KEY }
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  const json = await res.json();
-  if (json.errors && Object.keys(json.errors).length > 0) {
-    const msg = Object.values(json.errors)[0];
-    throw new Error(msg);
-  }
-  return json;
+  const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?limit=200&dates=20260611-20260719`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`ESPN scoreboard error ${res.status}`);
+  return res.json();
 }
 
 // ── Data processing ──────────────────────────────────────────
 
 function processData(standingsJson, fixturesJson) {
-  const teamMap = {}; // normalisedName → { stage, apiName, played, wins, draws, losses }
+  const teamMap = {};
 
-  // Build from standings (group stage data)
-  const groups = standingsJson?.response?.[0]?.league?.standings ?? [];
+  // Build from ESPN group standings
+  const groups = standingsJson?.standings?.children ?? [];
   for (const group of groups) {
-    for (const entry of group) {
-      const apiName = entry.team.name;
+    for (const entry of group.standings?.entries ?? []) {
+      const apiName = entry.team.displayName;
       const norm    = normaliseTeamName(apiName);
+      const stats   = Object.fromEntries((entry.stats ?? []).map(s => [s.name, s.value]));
       teamMap[norm] = {
         apiName,
-        stage: "Group Stage",
-        played: entry.all?.played ?? 0,
-        wins:   entry.all?.win    ?? 0,
-        draws:  entry.all?.draw   ?? 0,
-        losses: entry.all?.lose   ?? 0,
-        goalsFor:     entry.all?.goals?.for     ?? 0,
-        goalsAgainst: entry.all?.goals?.against ?? 0,
-        groupPoints:  entry.points ?? 0,
-        rank:         entry.rank   ?? 0,
+        stage:       "Group Stage",
+        played:      stats.gamesPlayed ?? 0,
+        wins:        stats.wins        ?? 0,
+        draws:       stats.ties        ?? 0,
+        losses:      stats.losses      ?? 0,
+        groupPoints: stats.points      ?? 0,
+        rank:        stats.rank        ?? 0,
       };
     }
   }
 
-  // Build fixture map for underdog bonus calculation
-  const fixtureList = fixturesJson?.response ?? [];
-  const teamFixtures = {}; // normName → [{ opponent, result, round, isGroupStage }]
+  // Build fixture map from ESPN scoreboard
+  const teamFixtures = {};
+  const events = fixturesJson?.events ?? [];
 
-  for (const f of fixtureList) {
-    const status = f.fixture.status.short;
-    const finished = ["FT","AET","PEN"].includes(status);
-    if (!finished) continue;
+  for (const event of events) {
+    const comp = event.competitions?.[0];
+    if (!comp || !event.status?.type?.completed) continue;
 
-    const homeNorm = normaliseTeamName(f.teams.home.name);
-    const awayNorm = normaliseTeamName(f.teams.away.name);
-    const homeGoals = f.goals.home;
-    const awayGoals = f.goals.away;
-    const round     = f.league.round ?? "";
+    const home = comp.competitors?.find(c => c.homeAway === "home");
+    const away = comp.competitors?.find(c => c.homeAway === "away");
+    if (!home || !away) continue;
+
+    const homeNorm  = normaliseTeamName(home.team.displayName);
+    const awayNorm  = normaliseTeamName(away.team.displayName);
+    const homeGoals = parseInt(home.score ?? "0");
+    const awayGoals = parseInt(away.score ?? "0");
+    const round     = comp.notes?.[0]?.headline ?? event.name ?? "";
     const isGroup   = round.toLowerCase().includes("group");
 
     const homeResult = homeGoals > awayGoals ? "W" : homeGoals < awayGoals ? "L" : "D";
@@ -463,10 +449,8 @@ function processData(standingsJson, fixturesJson) {
     teamFixtures[homeNorm].push({ opponentNorm: awayNorm, result: homeResult, round, isGroup });
     teamFixtures[awayNorm].push({ opponentNorm: homeNorm, result: awayResult, round, isGroup });
 
-    // Update stage for knockout rounds
     const stage = normaliseRound(round);
     if (stage !== "Group Stage") {
-      // The team that wins a knockout match advances; loser is set if not already deeper
       const STAGE_ORDER = ["Group Stage","Round of 32","Round of 16","Quarter-finals","Semi-finals","2nd Place","Winner"];
       const advancer = homeResult === "W" ? homeNorm : awayNorm;
       const loser    = homeResult === "W" ? awayNorm : homeNorm;
@@ -483,9 +467,6 @@ function processData(standingsJson, fixturesJson) {
       }
     }
   }
-
-  // Determine final stage for each team (the deepest stage they've reached in knockout)
-  // For now, group-stage exits stay as "Group Stage" (will be resolved at end of group stage)
 
   return { teamMap, teamFixtures };
 }
@@ -689,8 +670,6 @@ async function loadData() {
   btn.classList.add("spinning");
   setStatus("", "Fetching data…");
 
-
-
   try {
     const [standingsJson, fixturesJson] = await Promise.all([
       fetchStandings(),
@@ -705,12 +684,13 @@ async function loadData() {
 
     state.lastFetched = new Date();
     document.getElementById("last-updated").textContent = `Updated ${state.lastFetched.toLocaleTimeString()}`;
-    setStatus("live", `Live · ${fixturesJson.response?.filter(f => f.fixture.status.short === "1H" || f.fixture.status.short === "2H").length ?? 0} matches in progress`);
+    const liveCount = fixturesJson.events?.filter(e => e.status?.type?.state === "in").length ?? 0;
+    setStatus("live", `Live · ${liveCount} matches in progress`);
 
   } catch (err) {
     console.error(err);
     setStatus("error", `Error: ${err.message}`);
-    showSetupWarning(`Could not load data: <strong>${err.message}</strong>. Check your API key and try again.`);
+    showSetupWarning(`Could not load data: <strong>${err.message}</strong>. The ESPN API may be temporarily unavailable — try refreshing.`);
     useDemoData();
   }
 
