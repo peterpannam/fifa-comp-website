@@ -12,34 +12,6 @@ const CONFIG = {
   //    full team name list if anything doesn't match.
   PLAYERS: [
     {
-      name: "Peter",
-      color: "#f87171",
-      teams: [
-        { name: "Spain",    tier: 1 },
-        { name: "Portugal",  tier: 1 },
-        { name: "USA",    tier: 2 },
-        { name: "Austria",  tier: 2 },
-        { name: "DR Congo",   tier: 3 },
-        { name: "Scotland",    tier: 3 },
-        { name: "Ghana",    tier: 4 },
-        { name: "Saudi Arabia", tier: 4 },
-      ]
-    },
-    {
-      name: "Nathan",
-      color: "#60a5fa",
-      teams: [
-        { name: "France",       tier: 1 },
-        { name: "Croatia",    tier: 1 },
-        { name: "Ecuador",      tier: 2 },
-        { name: "Mexico",       tier: 2 },
-        { name: "Ivory Coast",  tier: 3 },
-        { name: "Canada",       tier: 3 },
-        { name: "Jordan", tier: 4 },
-        { name: "Qatar", tier: 4 },
-      ]
-    },
-    {
       name: "Andy",
       color: "#4ade80",
       teams: [
@@ -51,20 +23,6 @@ const CONFIG = {
         { name: "Algeria",     tier: 3 },
         { name: "Haiti",        tier: 4 },
         { name: "Uzbekistan",       tier: 4 },
-      ]
-    },
-    {
-      name: "Darcy",
-      color: "#fbbf24",
-      teams: [
-        { name: "Germany",      tier: 1 },
-        { name: "England",  tier: 1 },
-        { name: "Australia",          tier: 2 },
-        { name: "Iran",  tier: 2 },
-        { name: "Sweden",     tier: 3 },
-        { name: "Norway",      tier: 3 },
-        { name: "Curacao",         tier: 4 },
-        { name: "Cape Verde",  tier: 4 },
       ]
     },
     {
@@ -82,6 +40,20 @@ const CONFIG = {
       ]
     },
     {
+      name: "Darcy",
+      color: "#fbbf24",
+      teams: [
+        { name: "Germany",      tier: 1 },
+        { name: "England",  tier: 1 },
+        { name: "Australia",          tier: 2 },
+        { name: "Iran",  tier: 2 },
+        { name: "Sweden",     tier: 3 },
+        { name: "Norway",      tier: 3 },
+        { name: "Curacao",         tier: 4 },
+        { name: "Cape Verde",  tier: 4 },
+      ]
+    },
+    {
       name: "Lance",
       color: "#fb923c",
       teams: [
@@ -94,7 +66,36 @@ const CONFIG = {
         { name: "New Zealand", tier: 4 },
         { name: "Iraq",              tier: 4 },
       ]
-    },
+    },    
+    {
+      name: "Nathan",
+      color: "#60a5fa",
+      teams: [
+        { name: "France",       tier: 1 },
+        { name: "Croatia",    tier: 1 },
+        { name: "Ecuador",      tier: 2 },
+        { name: "Mexico",       tier: 2 },
+        { name: "Ivory Coast",  tier: 3 },
+        { name: "Canada",       tier: 3 },
+        { name: "Jordan", tier: 4 },
+        { name: "Qatar", tier: 4 },
+      ]
+    },                
+    {
+      name: "Peter",
+      color: "#f87171",
+      teams: [
+        { name: "Spain",    tier: 1 },
+        { name: "Portugal",  tier: 1 },
+        { name: "USA",    tier: 2 },
+        { name: "Austria",  tier: 2 },
+        { name: "DR Congo",   tier: 3 },
+        { name: "Scotland",    tier: 3 },
+        { name: "Ghana",    tier: 4 },
+        { name: "Saudi Arabia", tier: 4 },
+      ]
+    }
+
   ],
 
   // 2. Scoring — change only if your group's rules differ

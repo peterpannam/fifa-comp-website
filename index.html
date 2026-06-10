@@ -266,6 +266,7 @@
     <button class="tab-btn active" onclick="switchTab('leaderboard', this)">Leaderboard</button>
     <button class="tab-btn" onclick="switchTab('teams', this)">All Teams</button>
     <button class="tab-btn" onclick="switchTab('scoring', this)">Scoring</button>
+    <button class="tab-btn" onclick="switchTab('upcoming', this)">Upcoming</button>
   </div>
 
   <!-- Leaderboard tab -->
@@ -335,6 +336,13 @@
       Stage points are based on the furthest round a team reaches — not accumulated per round.<br>
       Underdog bonuses are earned per match result and accumulate across the tournament.
     </p>
+  </div>
+
+  <!-- Upcoming matches tab -->
+  <div class="tab-panel" id="tab-upcoming">
+    <div id="upcoming-list">
+      <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
+    </div>
   </div>
 </main>
 
@@ -654,6 +662,73 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+function findOwner(normTeamName) {
+  for (const p of CONFIG.PLAYERS) {
+    if (p.teams.some(t => normaliseTeamName(t.name) === normTeamName)) {
+      return { name: p.name, color: p.color };
+    }
+  }
+  return null;
+}
+
+function renderUpcoming(fixturesJson) {
+  const el = document.getElementById("upcoming-list");
+
+  const events = (fixturesJson?.events ?? [])
+    .filter(e => !e.status?.type?.completed)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (events.length === 0) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;">No upcoming matches — tournament may be over.</div>`;
+    return;
+  }
+
+  // Group by local date label
+  const byDate = {};
+  for (const event of events) {
+    const label = new Date(event.date).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    if (!byDate[label]) byDate[label] = [];
+    byDate[label].push(event);
+  }
+
+  el.innerHTML = Object.entries(byDate).map(([dateLabel, dayEvents]) => `
+    <div style="margin-bottom:24px;">
+      <div class="section-title">${dateLabel}</div>
+      ${dayEvents.map(event => {
+        const comp      = event.competitions?.[0];
+        const home      = comp?.competitors?.find(c => c.homeAway === "home");
+        const away      = comp?.competitors?.find(c => c.homeAway === "away");
+        if (!home || !away) return "";
+        const homeOwner = findOwner(normaliseTeamName(home.team.displayName));
+        const awayOwner = findOwner(normaliseTeamName(away.team.displayName));
+        const isRelevant = homeOwner || awayOwner;
+        const round     = comp?.notes?.[0]?.headline ?? "";
+        const isLive    = event.status?.type?.state === "in";
+        const time      = new Date(event.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+        return `
+        <div style="background:var(--surface);border:1px solid ${isRelevant ? "rgba(255,255,255,0.13)" : "var(--border)"};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;text-align:right;">
+              <div style="font-size:14px;font-weight:600;color:${homeOwner ? homeOwner.color : "var(--text)"};">${home.team.displayName}</div>
+              ${homeOwner ? `<div style="font-size:11px;color:${homeOwner.color};opacity:0.75;">${homeOwner.name}</div>` : ""}
+            </div>
+            <div style="font-size:12px;color:var(--muted);flex-shrink:0;width:28px;text-align:center;">vs</div>
+            <div style="flex:1;">
+              <div style="font-size:14px;font-weight:600;color:${awayOwner ? awayOwner.color : "var(--text)"};">${away.team.displayName}</div>
+              ${awayOwner ? `<div style="font-size:11px;color:${awayOwner.color};opacity:0.75;">${awayOwner.name}</div>` : ""}
+            </div>
+            <div style="text-align:right;flex-shrink:0;min-width:52px;">
+              ${isLive
+                ? `<div style="font-size:11px;font-weight:700;color:var(--green);">LIVE</div>`
+                : `<div style="font-size:12px;color:var(--muted);">${time}</div>`}
+              <div style="font-size:10px;color:var(--muted);margin-top:2px;">${round}</div>
+            </div>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>`).join("");
+}
+
 function showSetupWarning(msg) {
   document.getElementById("setup-warning").innerHTML = `
     <div class="setup-banner">
@@ -681,6 +756,7 @@ async function loadData() {
 
     renderLeaderboard(scores);
     renderTeamGrid(scores, teamMap);
+    renderUpcoming(fixturesJson);
 
     state.lastFetched = new Date();
     document.getElementById("last-updated").textContent = `Updated ${state.lastFetched.toLocaleTimeString()}`;
