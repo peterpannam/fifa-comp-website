@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -356,13 +356,12 @@ const state = {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-// Map API-Football round strings → our stage names
 function normaliseRound(round) {
   if (!round) return "Group Stage";
   const r = round.toLowerCase();
   if (r.includes("group"))           return "Group Stage";
-  if (r.includes("round of 32") || r.includes("2nd round") || r.includes("round of 32")) return "Round of 32";
-  if (r.includes("round of 16") || r.includes("1st round knockout")) return "Round of 16";
+  if (r.includes("round of 32") || r.includes("2nd round")) return "Round of 32";
+  if (r.includes("round of 16") || r.includes("rd of 16") || r.includes("1st round knockout")) return "Round of 16";
   if (r.includes("quarter"))         return "Quarter-finals";
   if (r.includes("semi"))            return "Semi-finals";
   if (r.includes("final"))           return r.includes("3rd") ? "Semi-finals" : "2nd Place";
@@ -445,8 +444,8 @@ function processData(standingsJson, fixturesJson) {
     const awayNorm  = normaliseTeamName(away.team.displayName);
     const homeGoals = parseInt(home.score ?? "0");
     const awayGoals = parseInt(away.score ?? "0");
-    const round     = comp.notes?.[0]?.headline ?? event.name ?? "";
-    const isGroup   = round.toLowerCase().includes("group");
+    const round   = comp.notes?.[0]?.headline || event.season?.type?.name || event.season?.slug?.replace(/-/g, " ") || "";
+    const isGroup = round.toLowerCase().includes("group");
 
     const homeResult = homeGoals > awayGoals ? "W" : homeGoals < awayGoals ? "L" : "D";
     const awayResult = homeResult === "W" ? "L" : homeResult === "L" ? "W" : "D";
@@ -662,35 +661,49 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const FLAG_EMOJI = {
-  "algeria":"🇩🇿","argentina":"🇦🇷","australia":"🇦🇺","austria":"🇦🇹",
-  "belgium":"🇧🇪","bolivia":"🇧🇴","bosnia & herzegovina":"🇧🇦","bosnia and herzegovina":"🇧🇦",
-  "brazil":"🇧🇷","cameroon":"🇨🇲","canada":"🇨🇦","cape verde":"🇨🇻",
-  "chile":"🇨🇱","colombia":"🇨🇴","costa rica":"🇨🇷","croatia":"🇭🇷",
-  "curacao":"🇨🇼","czechia":"🇨🇿","czech republic":"🇨🇿",
-  "dr congo":"🇨🇩","democratic republic of congo":"🇨🇩",
-  "ecuador":"🇪🇨","egypt":"🇪🇬","england":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","france":"🇫🇷",
-  "germany":"🇩🇪","ghana":"🇬🇭","haiti":"🇭🇹","honduras":"🇭🇳",
-  "iran":"🇮🇷","iraq":"🇮🇶","ivory coast":"🇨🇮","côte d'ivoire":"🇨🇮",
-  "japan":"🇯🇵","jordan":"🇯🇴","mexico":"🇲🇽","morocco":"🇲🇦",
-  "netherlands":"🇳🇱","new zealand":"🇳🇿","nigeria":"🇳🇬","norway":"🇳🇴",
-  "panama":"🇵🇦","paraguay":"🇵🇾","peru":"🇵🇪","portugal":"🇵🇹",
-  "qatar":"🇶🇦","saudi arabia":"🇸🇦","scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","senegal":"🇸🇳",
-  "south africa":"🇿🇦","south korea":"🇰🇷","korea republic":"🇰🇷",
-  "spain":"🇪🇸","sweden":"🇸🇪","switzerland":"🇨🇭",
-  "tunisia":"🇹🇳","turkiye":"🇹🇷","turkey":"🇹🇷",
-  "ukraine":"🇺🇦","uruguay":"🇺🇾","usa":"🇺🇸","united states":"🇺🇸",
-  "uzbekistan":"🇺🇿","venezuela":"🇻🇪","wales":"🏴󠁧󠁢󠁷󠁬󠁳󠁿",
+const FLAG_FILE = {
+  "algeria":"Flag_of_Algeria","argentina":"Flag_of_Argentina",
+  "australia":"Flag_of_Australia","austria":"Flag_of_Austria",
+  "belgium":"Flag_of_Belgium",
+  "bosnia & herzegovina":"Flag_of_Bosnia_and_Herzegovina",
+  "bosnia and herzegovina":"Flag_of_Bosnia_and_Herzegovina",
+  "brazil":"Flag_of_Brazil","canada":"Flag_of_Canada",
+  "cape verde":"Flag_of_Cape_Verde","colombia":"Flag_of_Colombia",
+  "croatia":"Flag_of_Croatia","curacao":"Flag_of_Curaçao",
+  "czechia":"Flag_of_Czech_Republic","czech republic":"Flag_of_Czech_Republic",
+  "dr congo":"Flag_of_Democratic_Republic_of_Congo",
+  "democratic republic of congo":"Flag_of_Democratic_Republic_of_Congo",
+  "ecuador":"Flag_of_Ecuador","egypt":"Flag_of_Egypt",
+  "england":"Flag_of_England","france":"Flag_of_France",
+  "germany":"Flag_of_Germany","ghana":"Flag_of_Ghana",
+  "haiti":"Flag_of_Haiti","iran":"Flag_of_Iran",
+  "ivory coast":"Flag_of_Ivory_Coast","cote d'ivoire":"Flag_of_Ivory_Coast",
+  "japan":"Flag_of_Japan","jordan":"Flag_of_Jordan",
+  "mexico":"Flag_of_Mexico","morocco":"Flag_of_Morocco",
+  "netherlands":"Flag_of_Netherlands","new zealand":"Flag_of_New_Zealand",
+  "norway":"Flag_of_Norway","panama":"Flag_of_Panama",
+  "paraguay":"Flag_of_Paraguay","portugal":"Flag_of_Portugal",
+  "qatar":"Flag_of_Qatar","saudi arabia":"Flag_of_Saudi_Arabia",
+  "scotland":"Flag_of_Scotland","senegal":"Flag_of_Senegal",
+  "south africa":"Flag_of_South_Africa",
+  "south korea":"Flag_of_South_Korea","korea republic":"Flag_of_South_Korea",
+  "spain":"Flag_of_Spain","sweden":"Flag_of_Sweden",
+  "switzerland":"Flag_of_Switzerland","tunisia":"Flag_of_Tunisia",
+  "turkiye":"Flag_of_Turkey","turkey":"Flag_of_Turkey",
+  "united states":"Flag_of_United_States","usa":"Flag_of_United_States",
+  "uruguay":"Flag_of_Uruguay","uzbekistan":"Flag_of_Uzbekistan",
 };
 
-function flagEmoji(teamName) {
-  return FLAG_EMOJI[teamName.toLowerCase()] ?? "";
+function flagImg(teamName) {
+  const file = FLAG_FILE[teamName.toLowerCase()];
+  if (!file) return "";
+  return '<img src="flags/' + file + '.svg" width="22" height="15" style="vertical-align:middle;border-radius:2px;margin:0 3px;" alt="">';
 }
-
 function mlToDecimal(ml) {
-  if (!ml && ml !== 0) return null;
-  const dec = ml > 0 ? ml / 100 + 1 : 100 / Math.abs(ml) + 1;
-  return dec.toFixed(2);
+  if (ml == null) return null;
+  const n = parseInt(ml, 10);
+  if (isNaN(n)) return null;
+  return (n > 0 ? n / 100 + 1 : 100 / Math.abs(n) + 1).toFixed(2);
 }
 
 function findOwner(normTeamName) {
@@ -732,17 +745,17 @@ function renderUpcoming(fixturesJson) {
         const homeOwner  = findOwner(normaliseTeamName(home.team.displayName));
         const awayOwner  = findOwner(normaliseTeamName(away.team.displayName));
         const isRelevant = homeOwner || awayOwner;
-        const round      = comp?.notes?.[0]?.headline ?? "";
         const isLive     = event.status?.type?.state === "in";
         const time       = new Date(event.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-        const homeFlag   = flagEmoji(home.team.displayName);
-        const awayFlag   = flagEmoji(away.team.displayName);
+        const homeFlag   = flagImg(home.team.displayName);
+        const awayFlag   = flagImg(away.team.displayName);
 
         const espnOdds   = comp?.odds?.[0];
-        const homeOdds   = mlToDecimal(espnOdds?.homeTeamOdds?.moneyLine);
-        const awayOdds   = mlToDecimal(espnOdds?.awayTeamOdds?.moneyLine);
-        const drawOdds   = mlToDecimal(espnOdds?.drawOdds?.moneyLine);
+        const homeOdds   = mlToDecimal(espnOdds?.moneyline?.home?.close?.odds);
+        const awayOdds   = mlToDecimal(espnOdds?.moneyline?.away?.close?.odds);
+        const drawOdds   = mlToDecimal(espnOdds?.moneyline?.draw?.close?.odds);
         const hasOdds    = homeOdds && awayOdds;
+        const round      = comp?.notes?.[0]?.headline || event.season?.type?.name || "";
 
         return `
         <div style="background:var(--surface);border:1px solid ${isRelevant ? "rgba(255,255,255,0.13)" : "var(--border)"};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
