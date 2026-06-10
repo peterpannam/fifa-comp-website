@@ -384,7 +384,7 @@ function getTier(teamName) {
 
 function normaliseTeamName(name) {
   return name.toLowerCase().trim()
-    .replace(/&/g, "and")
+    .replace(/&/g, "-")
     .replace(/\s+/g, " ");
 }
 
@@ -662,6 +662,37 @@ function hexWithAlpha(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+const FLAG_EMOJI = {
+  "algeria":"🇩🇿","argentina":"🇦🇷","australia":"🇦🇺","austria":"🇦🇹",
+  "belgium":"🇧🇪","bolivia":"🇧🇴","bosnia & herzegovina":"🇧🇦","bosnia and herzegovina":"🇧🇦",
+  "brazil":"🇧🇷","cameroon":"🇨🇲","canada":"🇨🇦","cape verde":"🇨🇻",
+  "chile":"🇨🇱","colombia":"🇨🇴","costa rica":"🇨🇷","croatia":"🇭🇷",
+  "curacao":"🇨🇼","czechia":"🇨🇿","czech republic":"🇨🇿",
+  "dr congo":"🇨🇩","democratic republic of congo":"🇨🇩",
+  "ecuador":"🇪🇨","egypt":"🇪🇬","england":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","france":"🇫🇷",
+  "germany":"🇩🇪","ghana":"🇬🇭","haiti":"🇭🇹","honduras":"🇭🇳",
+  "iran":"🇮🇷","iraq":"🇮🇶","ivory coast":"🇨🇮","côte d'ivoire":"🇨🇮",
+  "japan":"🇯🇵","jordan":"🇯🇴","mexico":"🇲🇽","morocco":"🇲🇦",
+  "netherlands":"🇳🇱","new zealand":"🇳🇿","nigeria":"🇳🇬","norway":"🇳🇴",
+  "panama":"🇵🇦","paraguay":"🇵🇾","peru":"🇵🇪","portugal":"🇵🇹",
+  "qatar":"🇶🇦","saudi arabia":"🇸🇦","scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","senegal":"🇸🇳",
+  "south africa":"🇿🇦","south korea":"🇰🇷","korea republic":"🇰🇷",
+  "spain":"🇪🇸","sweden":"🇸🇪","switzerland":"🇨🇭",
+  "tunisia":"🇹🇳","turkiye":"🇹🇷","turkey":"🇹🇷",
+  "ukraine":"🇺🇦","uruguay":"🇺🇾","usa":"🇺🇸","united states":"🇺🇸",
+  "uzbekistan":"🇺🇿","venezuela":"🇻🇪","wales":"🏴󠁧󠁢󠁷󠁬󠁳󠁿",
+};
+
+function flagEmoji(teamName) {
+  return FLAG_EMOJI[teamName.toLowerCase()] ?? "";
+}
+
+function mlToDecimal(ml) {
+  if (!ml && ml !== 0) return null;
+  const dec = ml > 0 ? ml / 100 + 1 : 100 / Math.abs(ml) + 1;
+  return dec.toFixed(2);
+}
+
 function findOwner(normTeamName) {
   for (const p of CONFIG.PLAYERS) {
     if (p.teams.some(t => normaliseTeamName(t.name) === normTeamName)) {
@@ -683,7 +714,6 @@ function renderUpcoming(fixturesJson) {
     return;
   }
 
-  // Group by local date label
   const byDate = {};
   for (const event of events) {
     const label = new Date(event.date).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
@@ -695,26 +725,35 @@ function renderUpcoming(fixturesJson) {
     <div style="margin-bottom:24px;">
       <div class="section-title">${dateLabel}</div>
       ${dayEvents.map(event => {
-        const comp      = event.competitions?.[0];
-        const home      = comp?.competitors?.find(c => c.homeAway === "home");
-        const away      = comp?.competitors?.find(c => c.homeAway === "away");
+        const comp       = event.competitions?.[0];
+        const home       = comp?.competitors?.find(c => c.homeAway === "home");
+        const away       = comp?.competitors?.find(c => c.homeAway === "away");
         if (!home || !away) return "";
-        const homeOwner = findOwner(normaliseTeamName(home.team.displayName));
-        const awayOwner = findOwner(normaliseTeamName(away.team.displayName));
+        const homeOwner  = findOwner(normaliseTeamName(home.team.displayName));
+        const awayOwner  = findOwner(normaliseTeamName(away.team.displayName));
         const isRelevant = homeOwner || awayOwner;
-        const round     = comp?.notes?.[0]?.headline ?? "";
-        const isLive    = event.status?.type?.state === "in";
-        const time      = new Date(event.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+        const round      = comp?.notes?.[0]?.headline ?? "";
+        const isLive     = event.status?.type?.state === "in";
+        const time       = new Date(event.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+        const homeFlag   = flagEmoji(home.team.displayName);
+        const awayFlag   = flagEmoji(away.team.displayName);
+
+        const espnOdds   = comp?.odds?.[0];
+        const homeOdds   = mlToDecimal(espnOdds?.homeTeamOdds?.moneyLine);
+        const awayOdds   = mlToDecimal(espnOdds?.awayTeamOdds?.moneyLine);
+        const drawOdds   = mlToDecimal(espnOdds?.drawOdds?.moneyLine);
+        const hasOdds    = homeOdds && awayOdds;
+
         return `
         <div style="background:var(--surface);border:1px solid ${isRelevant ? "rgba(255,255,255,0.13)" : "var(--border)"};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:12px;">
             <div style="flex:1;text-align:right;">
-              <div style="font-size:14px;font-weight:600;color:${homeOwner ? homeOwner.color : "var(--text)"};">${home.team.displayName}</div>
+              <div style="font-size:14px;font-weight:600;color:${homeOwner ? homeOwner.color : "var(--text)"};">${home.team.displayName} ${homeFlag}</div>
               ${homeOwner ? `<div style="font-size:11px;color:${homeOwner.color};opacity:0.75;">${homeOwner.name}</div>` : ""}
             </div>
             <div style="font-size:12px;color:var(--muted);flex-shrink:0;width:28px;text-align:center;">vs</div>
             <div style="flex:1;">
-              <div style="font-size:14px;font-weight:600;color:${awayOwner ? awayOwner.color : "var(--text)"};">${away.team.displayName}</div>
+              <div style="font-size:14px;font-weight:600;color:${awayOwner ? awayOwner.color : "var(--text)"};">${awayFlag} ${away.team.displayName}</div>
               ${awayOwner ? `<div style="font-size:11px;color:${awayOwner.color};opacity:0.75;">${awayOwner.name}</div>` : ""}
             </div>
             <div style="text-align:right;flex-shrink:0;min-width:52px;">
@@ -724,6 +763,22 @@ function renderUpcoming(fixturesJson) {
               <div style="font-size:10px;color:var(--muted);margin-top:2px;">${round}</div>
             </div>
           </div>
+          ${hasOdds ? `
+          <div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+            <div style="flex:1;background:var(--surface2);border-radius:6px;padding:5px 8px;text-align:center;">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">${home.team.shortDisplayName ?? home.team.displayName}</div>
+              <div style="font-size:13px;font-weight:700;color:var(--text);">${homeOdds}</div>
+            </div>
+            ${drawOdds ? `
+            <div style="flex:1;background:var(--surface2);border-radius:6px;padding:5px 8px;text-align:center;">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Draw</div>
+              <div style="font-size:13px;font-weight:700;color:var(--text);">${drawOdds}</div>
+            </div>` : ""}
+            <div style="flex:1;background:var(--surface2);border-radius:6px;padding:5px 8px;text-align:center;">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">${away.team.shortDisplayName ?? away.team.displayName}</div>
+              <div style="font-size:13px;font-weight:700;color:var(--text);">${awayOdds}</div>
+            </div>
+          </div>` : ""}
         </div>`;
       }).join("")}
     </div>`).join("");

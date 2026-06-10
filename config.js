@@ -18,8 +18,8 @@ const CONFIG = {
         { name: "Brazil",       tier: 1 },
         { name: "Belgium",     tier: 1 },
         { name: "Japan",      tier: 2 },
-        { name: "Turkiye",      tier: 2 },
-        { name: "Tunisian",       tier: 3 },
+        { name: "Türkiye",      tier: 2 },
+        { name: "Tunisia",       tier: 3 },
         { name: "Algeria",     tier: 3 },
         { name: "Haiti",        tier: 4 },
         { name: "Uzbekistan",       tier: 4 },
@@ -36,7 +36,7 @@ const CONFIG = {
         { name: "Panama",     tier: 3 },
         { name: "Egypt",      tier: 3 },
         { name: "South Africa",        tier: 4 },
-        { name: "Bosnia & Herzegovina",   tier: 4 },
+        { name: "Bosnia-Herzegovina",   tier: 4 },
       ]
     },
     {
@@ -49,7 +49,7 @@ const CONFIG = {
         { name: "Iran",  tier: 2 },
         { name: "Sweden",     tier: 3 },
         { name: "Norway",      tier: 3 },
-        { name: "Curacao",         tier: 4 },
+        { name: "Curaçao",         tier: 4 },
         { name: "Cape Verde",  tier: 4 },
       ]
     },
@@ -87,9 +87,9 @@ const CONFIG = {
       teams: [
         { name: "Spain",    tier: 1 },
         { name: "Portugal",  tier: 1 },
-        { name: "USA",    tier: 2 },
+        { name: "United States",    tier: 2 },
         { name: "Austria",  tier: 2 },
-        { name: "DR Congo",   tier: 3 },
+        { name: "Congo DR",   tier: 3 },
         { name: "Scotland",    tier: 3 },
         { name: "Ghana",    tier: 4 },
         { name: "Saudi Arabia", tier: 4 },
