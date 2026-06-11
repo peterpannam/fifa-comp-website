@@ -207,6 +207,43 @@
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
+  /* ── Filter bar ── */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .filter-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-right: 2px;
+  }
+  .filter-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 4px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-chip:hover { color: #fff; }
+  .filter-chip.active {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border-color: rgba(255,255,255,0.15);
+  }
+  .filter-chip.owner-chip.active {
+    border-color: var(--chip-color, rgba(255,255,255,0.15));
+    color: var(--chip-color, #fff);
+  }
+
   /* ── Setup warning ── */
   .setup-banner {
     background: rgba(245,158,11,0.08);
@@ -284,6 +321,18 @@
   <div class="tab-panel" id="tab-teams">
     <div class="team-grid-section">
       <div class="section-title">All 48 teams</div>
+      <div class="filter-bar">
+        <div class="filter-group">
+          <span class="filter-label">Sort</span>
+          <button class="filter-chip active" data-sort="az" onclick="setTeamSort('az', this)">A–Z</button>
+          <button class="filter-chip" data-sort="points" onclick="setTeamSort('points', this)">Points</button>
+          <button class="filter-chip" data-sort="cup" onclick="setTeamSort('cup', this)">Cup Points</button>
+        </div>
+        <div class="filter-group" id="owner-filter">
+          <span class="filter-label">Owner</span>
+        </div>
+        <div class="filter-group" id="group-filter" style="display:none;"></div>
+      </div>
       <div class="team-grid" id="team-grid">
         <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
       </div>
@@ -341,6 +390,11 @@
 
   <!-- Upcoming matches tab -->
   <div class="tab-panel" id="tab-upcoming">
+    <div class="filter-bar">
+      <div class="filter-group" id="upcoming-owner-filter">
+        <span class="filter-label">Owner</span>
+      </div>
+    </div>
     <div id="upcoming-list">
       <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
     </div>
@@ -398,7 +452,7 @@ function normaliseTeamName(name) {
 // ── API fetch ────────────────────────────────────────────────
 
 async function fetchStandings() {
-  const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/standings`;
+  const url = `https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`ESPN standings error ${res.status}`);
   return res.json();
@@ -417,7 +471,7 @@ function processData(standingsJson, fixturesJson) {
   const teamMap = {};
 
   // Build from ESPN group standings
-  const groups = standingsJson?.standings?.children ?? [];
+  const groups = standingsJson?.children ?? standingsJson?.standings?.children ?? [];
   for (const group of groups) {
     for (const entry of group.standings?.entries ?? []) {
       const apiName = entry.team.displayName;
@@ -425,6 +479,7 @@ function processData(standingsJson, fixturesJson) {
       const stats   = Object.fromEntries((entry.stats ?? []).map(s => [s.name, s.value]));
       teamMap[norm] = {
         apiName,
+        group:       group.name ?? null,
         stage:       "Group Stage",
         played:      stats.gamesPlayed ?? 0,
         wins:        stats.wins        ?? 0,
@@ -599,9 +654,12 @@ function renderLeaderboard(scores) {
   }).join("");
 }
 
-function renderTeamGrid(scores, teamMap) {
-  const el = document.getElementById("team-grid");
+let teamGridData    = [];
+let teamSort        = "az";
+let teamOwnerFilter = "all";
+let teamGroupFilter = "all";
 
+function renderTeamGrid(scores, teamMap) {
   // Flatten all teams with owner info
   const allTeams = [];
   for (const p of scores) {
@@ -615,6 +673,8 @@ function renderTeamGrid(scores, teamMap) {
         color:   p.color,
         stage:   t.stage,
         pts:     t.pts,
+        group:   data.group ?? null,
+        mp:      data.groupPoints ?? 0,
         played:  data.played ?? 0,
         wins:    data.wins   ?? 0,
         draws:   data.draws  ?? 0,
@@ -623,13 +683,86 @@ function renderTeamGrid(scores, teamMap) {
     }
   }
 
-  allTeams.sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
+  teamGridData = allTeams;
+  buildOwnerFilter(scores);
+  buildGroupFilter(allTeams);
+  applyTeamGrid();
+}
 
-  el.innerHTML = allTeams.map(t => {
+function buildGroupFilter(allTeams) {
+  const el = document.getElementById("group-filter");
+  if (!el) return;
+  const groups = [...new Set(allTeams.map(t => t.group).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  if (groups.length === 0) { el.style.display = "none"; return; }
+  el.style.display = "";
+  const activeStillValid = teamGroupFilter === "all" || groups.includes(teamGroupFilter);
+  if (!activeStillValid) teamGroupFilter = "all";
+  const chips = [`<span class="filter-label">Group</span>`,
+    `<button class="filter-chip${teamGroupFilter === "all" ? " active" : ""}" data-group="all" onclick="setTeamGroup('all', this)">All</button>`];
+  for (const g of groups) {
+    const short = g.replace(/^Group\s+/i, "");
+    chips.push(`<button class="filter-chip${teamGroupFilter === g ? " active" : ""}" data-group="${g}" onclick="setTeamGroup('${g}', this)">${short}</button>`);
+  }
+  el.innerHTML = chips.join("");
+}
+
+function setTeamGroup(group, btn) {
+  teamGroupFilter = group;
+  document.querySelectorAll('#tab-teams .filter-chip[data-group]').forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyTeamGrid();
+}
+
+function buildOwnerFilter(scores) {
+  const el = document.getElementById("owner-filter");
+  if (!el || el.querySelector(".filter-chip")) return; // build once
+  const chips = [`<button class="filter-chip active" data-owner="all" onclick="setTeamOwner('all', this)">All</button>`];
+  for (const p of scores) {
+    chips.push(`<button class="filter-chip owner-chip" data-owner="${p.name}" style="--chip-color:${p.color};" onclick="setTeamOwner('${p.name}', this)">${p.name}</button>`);
+  }
+  el.insertAdjacentHTML("beforeend", chips.join(""));
+}
+
+function setTeamSort(sort, btn) {
+  teamSort = sort;
+  document.querySelectorAll('#tab-teams .filter-chip[data-sort]').forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyTeamGrid();
+}
+
+function setTeamOwner(owner, btn) {
+  teamOwnerFilter = owner;
+  document.querySelectorAll('#tab-teams .filter-chip[data-owner]').forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyTeamGrid();
+}
+
+function applyTeamGrid() {
+  const el = document.getElementById("team-grid");
+
+  let teams = teamGridData.filter(t =>
+    (teamOwnerFilter === "all" || t.owner === teamOwnerFilter) &&
+    (teamGroupFilter === "all" || t.group === teamGroupFilter));
+
+  if (teamSort === "az") {
+    teams = teams.slice().sort((a, b) => a.name.localeCompare(b.name));
+  } else if (teamSort === "cup") {
+    teams = teams.slice().sort((a, b) => b.mp - a.mp || a.name.localeCompare(b.name));
+  } else {
+    teams = teams.slice().sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
+  }
+
+  if (teams.length === 0) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;">No teams match.</div>`;
+    return;
+  }
+
+  el.innerHTML = teams.map(t => {
     const isElim     = t.stage === "Group Stage" && t.played >= 3;
     const stageCls   = isElim ? "eliminated" : t.pts > 0 ? "in-progress" : "";
     const stageLabel = isElim ? "Eliminated" : t.stage;
-    const record     = t.played > 0 ? `${t.wins}W ${t.draws}D ${t.losses}L` : "Not started";
+    const record     = t.played > 0 ? `${t.mp}MP &middot; ${t.wins}W ${t.draws}D ${t.losses}L` : "Not started";
 
     return `
     <div class="team-card">
@@ -641,7 +774,7 @@ function renderTeamGrid(scores, teamMap) {
         <div class="team-stage-badge ${stageCls}">${stageLabel}</div>
       </div>
       <div class="team-pts-row">
-        <span>${record}</span>
+        <span class="team-pts-val">${record}</span>
         <span class="team-pts-val">${t.pts} pts</span>
       </div>
     </div>`;
@@ -731,15 +864,55 @@ function findTeamInfo(normTeamName) {
   return null;
 }
 
+let upcomingData        = null;
+let upcomingOwnerFilter = "all";
+
 function renderUpcoming(fixturesJson) {
+  upcomingData = fixturesJson;
+  buildUpcomingOwnerFilter();
+  applyUpcoming();
+}
+
+function buildUpcomingOwnerFilter() {
+  const el = document.getElementById("upcoming-owner-filter");
+  if (!el || el.querySelector(".filter-chip")) return; // build once
+  const chips = [`<button class="filter-chip active" data-owner="all" onclick="setUpcomingOwner('all', this)">All</button>`];
+  for (const p of CONFIG.PLAYERS) {
+    chips.push(`<button class="filter-chip owner-chip" data-owner="${p.name}" style="--chip-color:${p.color};" onclick="setUpcomingOwner('${p.name}', this)">${p.name}</button>`);
+  }
+  el.insertAdjacentHTML("beforeend", chips.join(""));
+}
+
+function setUpcomingOwner(owner, btn) {
+  upcomingOwnerFilter = owner;
+  document.querySelectorAll('#tab-upcoming .filter-chip[data-owner]').forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyUpcoming();
+}
+
+function eventOwnedBy(event, ownerName) {
+  const comp = event.competitions?.[0];
+  const home = comp?.competitors?.find(c => c.homeAway === "home");
+  const away = comp?.competitors?.find(c => c.homeAway === "away");
+  const homeOwner = home ? findTeamInfo(normaliseTeamName(home.team.displayName))?.owner?.name : null;
+  const awayOwner = away ? findTeamInfo(normaliseTeamName(away.team.displayName))?.owner?.name : null;
+  return homeOwner === ownerName || awayOwner === ownerName;
+}
+
+function applyUpcoming() {
+  const fixturesJson = upcomingData;
   const el = document.getElementById("upcoming-list");
 
   const events = (fixturesJson?.events ?? [])
     .filter(e => !e.status?.type?.completed)
+    .filter(e => upcomingOwnerFilter === "all" || eventOwnedBy(e, upcomingOwnerFilter))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   if (events.length === 0) {
-    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;">No upcoming matches — tournament may be over.</div>`;
+    const msg = upcomingOwnerFilter === "all"
+      ? "No upcoming matches — tournament may be over."
+      : `No upcoming matches for ${upcomingOwnerFilter}.`;
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;">${msg}</div>`;
     return;
   }
 
