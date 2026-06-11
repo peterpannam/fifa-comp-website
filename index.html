@@ -266,6 +266,7 @@
     <button class="tab-btn active" onclick="switchTab('leaderboard', this)">Leaderboard</button>
     <button class="tab-btn" onclick="switchTab('teams', this)">All Teams</button>
     <button class="tab-btn" onclick="switchTab('upcoming', this)">Upcoming</button>
+    <button class="tab-btn" onclick="switchTab('results', this)">Results</button>
     <button class="tab-btn" onclick="switchTab('scoring', this)">Scoring</button>
   </div>
 
@@ -341,6 +342,13 @@
   <!-- Upcoming matches tab -->
   <div class="tab-panel" id="tab-upcoming">
     <div id="upcoming-list">
+      <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Results tab -->
+  <div class="tab-panel" id="tab-results">
+    <div id="results-list">
       <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
     </div>
   </div>
@@ -499,7 +507,7 @@ function calcUnderdogBonus(playerTeams, teamFixtures) {
       const oppTier = getTier(f.opponentNorm);
       if (!oppTier) continue; // opponent not in our game
 
-      const tierDiff = oppTier - myTier; // positive = we're the underdog
+      const tierDiff = myTier - oppTier; // positive = we're the underdog (higher tier number = weaker)
       if (tierDiff <= 0) continue;       // no underdog bonus if we're the favourite
 
       const bonusConfig = CONFIG.UNDERDOG_BONUS[tierDiff];
@@ -825,6 +833,96 @@ function renderUpcoming(fixturesJson) {
     </div>`).join("");
 }
 
+function renderResults(fixturesJson) {
+  const el = document.getElementById("results-list");
+
+  const events = (fixturesJson?.events ?? [])
+    .filter(e => e.status?.type?.completed)
+    .sort((a, b) => new Date(b.date) - new Date(a.date)); // most recent first
+
+  if (events.length === 0) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;">No completed matches yet.</div>`;
+    return;
+  }
+
+  const byDate = {};
+  for (const event of events) {
+    const label = new Date(event.date).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    if (!byDate[label]) byDate[label] = [];
+    byDate[label].push(event);
+  }
+
+  el.innerHTML = Object.entries(byDate).map(([dateLabel, dayEvents]) => `
+    <div style="margin-bottom:24px;">
+      <div class="section-title">${dateLabel}</div>
+      ${dayEvents.map(event => {
+        const comp       = event.competitions?.[0];
+        const home       = comp?.competitors?.find(c => c.homeAway === "home");
+        const away       = comp?.competitors?.find(c => c.homeAway === "away");
+        if (!home || !away) return "";
+        const homeInfo   = findTeamInfo(normaliseTeamName(home.team.displayName));
+        const awayInfo   = findTeamInfo(normaliseTeamName(away.team.displayName));
+        const homeOwner  = homeInfo?.owner ?? null;
+        const awayOwner  = awayInfo?.owner ?? null;
+        const homeTier   = homeInfo?.tier ?? null;
+        const awayTier   = awayInfo?.tier ?? null;
+        const isRelevant = homeOwner || awayOwner;
+        const homeFlag   = flagImg(home.team.displayName);
+        const awayFlag   = flagImg(away.team.displayName);
+        const round      = comp?.notes?.[0]?.headline || event.season?.type?.name || "";
+
+        const homeGoals  = parseInt(home.score ?? "0");
+        const awayGoals  = parseInt(away.score ?? "0");
+        const homeWin    = homeGoals > awayGoals;
+        const awayWin    = awayGoals > homeGoals;
+
+        return `
+        <div style="background:var(--surface);border:1px solid ${isRelevant ? "rgba(255,255,255,0.13)" : "var(--border)"};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;text-align:center;">
+              <div style="font-size:14px;">${homeTier != null ? `<div style="display:inline-block;margin-right:3px;font-size:10px;font-weight:600;color:var(--muted);background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">T${homeTier}</div>` : ""}
+<span style="font-weight:600;color:${homeOwner ? homeOwner.color : "var(--text)"};">${home.team.displayName} ${homeFlag}</span></div>
+              ${homeOwner ? `<div style="font-size:11px;color:${homeOwner.color};opacity:0.75;">${homeOwner.name}</div>` : ""}
+            </div>
+            <div style="flex-shrink:0;text-align:center;font-size:18px;font-weight:700;color:var(--text);white-space:nowrap;">
+              <span style="opacity:${homeWin ? 1 : 0.55};">${homeGoals}</span><span style="color:var(--muted);margin:0 5px;">&ndash;</span><span style="opacity:${awayWin ? 1 : 0.55};">${awayGoals}</span>
+            </div>
+            <div style="flex:1; text-align:center;">
+              <div style="font-size:14px;font-weight:600;"><span style="margin-right:3px;color:${awayOwner ? awayOwner.color : "var(--text)"};">${awayFlag} ${away.team.displayName}</span>${awayTier != null ? `<div style="display:inline-block;margin-left:3px;font-size:10px;font-weight:600;color:var(--muted);background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">T${awayTier}</div>` : ""}
+</div>
+              ${awayOwner ? `<div style="font-size:11px;color:${awayOwner.color};opacity:0.75;">${awayOwner.name}</div>` : ""}
+            </div>
+            <div style="text-align:right;flex-shrink:0;min-width:52px;">
+              <div style="font-size:11px;font-weight:700;color:var(--muted);">FT</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px;">${round}</div>
+            </div>
+          </div>
+          ${(() => {
+            if (homeTier == null || awayTier == null) return "";
+            const diff = Math.abs(homeTier - awayTier);
+            if (diff === 0) return "";
+            const bonus = CONFIG.UNDERDOG_BONUS[diff];
+            if (!bonus) return "";
+            const underdogIsHome = homeTier > awayTier;
+            const underdogOwner  = underdogIsHome ? homeOwner : awayOwner;
+            const underdogName   = underdogIsHome ? (home.team.shortDisplayName || home.team.displayName) : (away.team.shortDisplayName || away.team.displayName);
+            const underdogWon    = underdogIsHome ? homeWin : awayWin;
+            const isDraw         = homeGoals === awayGoals;
+            const isGroup        = round.toLowerCase().includes("group");
+            const ownerLabel     = underdogOwner ? ` <span style="color:${underdogOwner.color};">(${underdogOwner.name})</span>` : "";
+            let earned = "";
+            if (underdogWon)              earned = `<span style="color:var(--gold);font-weight:700;">+${bonus.win}pts</span>`;
+            else if (isDraw && isGroup)   earned = `<span style="color:var(--text);font-weight:600;">+${bonus.draw}pts</span>`;
+            else                          earned = `<span style="color:var(--muted);">no bonus</span>`;
+            return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);">
+              <span style="font-weight:600;color:var(--text);">${underdogName}</span>${ownerLabel}<span>underdog &mdash; earned ${earned}</span>
+            </div>`;
+          })()}
+        </div>`;
+      }).join("")}
+    </div>`).join("");
+}
+
 function showSetupWarning(msg) {
   document.getElementById("setup-warning").innerHTML = `
     <div class="setup-banner">
@@ -853,6 +951,7 @@ async function loadData() {
     renderLeaderboard(scores);
     renderTeamGrid(scores, teamMap);
     renderUpcoming(fixturesJson);
+    renderResults(fixturesJson);
 
     state.lastFetched = new Date();
     document.getElementById("last-updated").textContent = `Updated ${state.lastFetched.toLocaleTimeString()}`;
