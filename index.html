@@ -196,6 +196,7 @@
     scrollbar-width: none;
   }
   .tabs::-webkit-scrollbar { display: none; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
   .tab-btn {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -358,6 +359,19 @@
   .col-final .bk-match::after {
     content: ''; position: absolute; right: 0; top: 50%;
     width: var(--bk-gutter); height: 2px; background: var(--bk-line);
+  /* ── Message board ── */
+  .board-intro {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+  #giscus-container { min-height: 200px; }
+  #giscus-container .gsc-loading,
+  #giscus-container .board-status {
+    color: var(--muted);
+    font-size: 13px;
+    padding: 20px 0;
   }
 
   /* ── Filter bar ── */
@@ -425,6 +439,8 @@
     .lb-row { grid-template-columns: 24px 1fr auto; gap: 8px; }
     .lb-breakdown { display: none; }
     .team-grid { grid-template-columns: 1fr; }
+    .tabs { gap: 5px; }
+    .tab-btn { padding: 6px 10px; font-size: 12px; flex: 1 1 auto; }
   }
 </style>
 </head>
@@ -459,6 +475,7 @@
     <button class="tab-btn" onclick="switchTab('results', this)">Results</button>
     <button class="tab-btn" onclick="switchTab('bracket', this)">Bracket</button>
     <button class="tab-btn" onclick="switchTab('scoring', this)">Scoring</button>
+    <button class="tab-btn" onclick="switchTab('messages', this)">Message Board</button>
   </div>
 
   <!-- Leaderboard tab -->
@@ -580,6 +597,12 @@
         <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
       </div>
     </div>
+  <!-- Message board tab -->
+  <div class="tab-panel" id="tab-messages">
+    <p class="board-intro">
+      Sign in with GitHub to post. Be nice — or don't, it's the World Cup.
+    </p>
+    <div id="giscus-container"></div>
   </div>
 </main>
 
@@ -1522,6 +1545,46 @@ function switchTab(name, btn) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
   document.getElementById(`tab-${name}`).classList.add("active");
   btn.classList.add("active");
+  if (name === "messages") mountGiscus();
+}
+
+// ── Message board (giscus) ────────────────────────────────────
+// Comments are stored in this repo's GitHub Discussions. The widget
+// is loaded on first visit to the tab so it doesn't fetch on page load.
+// Setup: enable Discussions, install the giscus app, then paste the
+// repo/category IDs from https://giscus.app into the placeholders below.
+let giscusMounted = false;
+function mountGiscus() {
+  if (giscusMounted) return;
+  giscusMounted = true;
+
+  const container = document.getElementById("giscus-container");
+  container.innerHTML = '<div class="board-status">Loading messages…</div>';
+
+  const s = document.createElement("script");
+  s.src = "https://giscus.app/client.js";
+  s.setAttribute("data-repo", "peterpannam/fifa-comp-website");
+  s.setAttribute("data-repo-id", "R_kgDOS1VbuA");          // ← from giscus.app
+  s.setAttribute("data-category", "General");
+  s.setAttribute("data-category-id", "DIC_kwDOS1VbuM4C_OaH");  // ← from giscus.app
+  s.setAttribute("data-mapping", "specific");
+  s.setAttribute("data-term", "Message Board");             // one shared thread
+  s.setAttribute("data-strict", "0");
+  s.setAttribute("data-reactions-enabled", "1");
+  s.setAttribute("data-emit-metadata", "0");
+  s.setAttribute("data-input-position", "top");
+  s.setAttribute("data-theme", "dark");
+  s.setAttribute("data-lang", "en");
+  s.crossOrigin = "anonymous";
+  s.async = true;
+
+  // giscus replaces the loading message with its own iframe on load
+  s.addEventListener("load", () => {
+    const status = container.querySelector(".board-status");
+    if (status) status.remove();
+  });
+
+  container.appendChild(s);
 }
 
 // ── Auto-refresh every 5 minutes ──────────────────────────────
