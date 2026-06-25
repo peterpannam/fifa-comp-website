@@ -187,7 +187,15 @@
   .t4 { background: rgba(251,191,36,0.15);  color: #fbbf24; }
 
   /* ── Tabs ── */
-  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
   .tab-btn {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -197,6 +205,8 @@
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .tab-btn.active {
     background: rgba(255,255,255,0.08);
@@ -206,6 +216,149 @@
 
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
+
+  /* ── Knockout bracket ── */
+  /* Break the bracket tab out of main's max-width so it can fill the screen */
+  #tab-bracket {
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    padding: 0 20px;
+  }
+  #tab-bracket > * {
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .bracket-scroll {
+    overflow-x: auto;
+    padding-bottom: 10px;
+    --bk-col: 132px;
+    --bk-gutter: 16px;
+    --bk-line: rgba(255,255,255,0.16);
+  }
+  .bracket-head,
+  .bracket { display: flex; min-width: 1188px; }
+  .bracket-head { margin-bottom: 10px; }
+  .bracket-head > div {
+    flex: 1;
+    min-width: var(--bk-col);
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .bracket-head > div.head-final { color: var(--gold); }
+
+  .bk-round {
+    flex: 1;
+    min-width: var(--bk-col);
+    display: flex;
+    flex-direction: column;
+  }
+  .bk-match {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 4px var(--bk-gutter);
+  }
+  .bk-card {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .col-final .bk-card { border-color: rgba(245,158,11,0.4); }
+  .bk-card.tbd { opacity: 0.4; }
+  .bk-team {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  .bk-team + .bk-team { border-top: 1px solid var(--border); }
+  .bk-team.win { background: rgba(255,255,255,0.05); }
+  .bk-team.lose { opacity: 0.45; }
+  .bk-tn {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .bk-owner { font-size: 9px; color: var(--muted); margin-left: 2px; }
+  .bk-sc {
+    font-weight: 700;
+    color: var(--muted);
+    min-width: 12px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .bk-team.win .bk-sc { color: var(--gold); }
+
+  /* ── Bracket connector lines ── */
+  /* LEFT side: lines converge to the right (toward centre) */
+  .side-left.col-pair .bk-match::after {
+    content: ''; position: absolute; right: 0; width: var(--bk-gutter);
+    box-sizing: border-box;
+  }
+  .side-left.col-pair .bk-match:nth-child(odd)::after {
+    top: 50%; height: 50%;
+    border-top: 2px solid var(--bk-line);
+    border-right: 2px solid var(--bk-line);
+  }
+  .side-left.col-pair .bk-match:nth-child(even)::after {
+    bottom: 50%; height: 50%;
+    border-bottom: 2px solid var(--bk-line);
+    border-right: 2px solid var(--bk-line);
+  }
+  .side-left.col-single .bk-match::after {
+    content: ''; position: absolute; right: 0; top: 50%;
+    width: var(--bk-gutter); height: 2px; background: var(--bk-line);
+  }
+  .side-left.col-recv .bk-match::before {
+    content: ''; position: absolute; left: 0; top: 50%;
+    width: var(--bk-gutter); height: 2px; background: var(--bk-line);
+  }
+  /* RIGHT side: mirrored, lines converge to the left (toward centre) */
+  .side-right.col-pair .bk-match::after {
+    content: ''; position: absolute; left: 0; width: var(--bk-gutter);
+    box-sizing: border-box;
+  }
+  .side-right.col-pair .bk-match:nth-child(odd)::after {
+    top: 50%; height: 50%;
+    border-top: 2px solid var(--bk-line);
+    border-left: 2px solid var(--bk-line);
+  }
+  .side-right.col-pair .bk-match:nth-child(even)::after {
+    bottom: 50%; height: 50%;
+    border-bottom: 2px solid var(--bk-line);
+    border-left: 2px solid var(--bk-line);
+  }
+  .side-right.col-single .bk-match::after {
+    content: ''; position: absolute; left: 0; top: 50%;
+    width: var(--bk-gutter); height: 2px; background: var(--bk-line);
+  }
+  .side-right.col-recv .bk-match::before {
+    content: ''; position: absolute; right: 0; top: 50%;
+    width: var(--bk-gutter); height: 2px; background: var(--bk-line);
+  }
+  /* Centre final: receives a stub from each side */
+  .col-final .bk-match::before {
+    content: ''; position: absolute; left: 0; top: 50%;
+    width: var(--bk-gutter); height: 2px; background: var(--bk-line);
+  }
+  .col-final .bk-match::after {
+    content: ''; position: absolute; right: 0; top: 50%;
+    width: var(--bk-gutter); height: 2px; background: var(--bk-line);
+  }
 
   /* ── Filter bar ── */
   .filter-bar {
@@ -304,6 +457,7 @@
     <button class="tab-btn" onclick="switchTab('teams', this)">All Teams</button>
     <button class="tab-btn" onclick="switchTab('upcoming', this)">Upcoming</button>
     <button class="tab-btn" onclick="switchTab('results', this)">Results</button>
+    <button class="tab-btn" onclick="switchTab('bracket', this)">Bracket</button>
     <button class="tab-btn" onclick="switchTab('scoring', this)">Scoring</button>
   </div>
 
@@ -406,6 +560,27 @@
       <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
     </div>
   </div>
+
+  <!-- Bracket tab -->
+  <div class="tab-panel" id="tab-bracket">
+    <div class="section-title">Knockout bracket</div>
+    <div class="bracket-scroll">
+      <div class="bracket-head">
+        <div>R32</div>
+        <div>R16</div>
+        <div>QF</div>
+        <div>SF</div>
+        <div class="head-final">Final</div>
+        <div>SF</div>
+        <div>QF</div>
+        <div>R16</div>
+        <div>R32</div>
+      </div>
+      <div class="bracket" id="bracket-view">
+        <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
+      </div>
+    </div>
+  </div>
 </main>
 
 <script>
@@ -432,6 +607,22 @@ function normaliseRound(round) {
 
 function stagePoints(stage) {
   return CONFIG.STAGE_POINTS[stage] ?? 0;
+}
+
+// Group-stage status from ESPN's standings note. A team is only considered
+// eliminated in the groups once it has finished all 3 games AND the note says so —
+// otherwise teams that have qualified (or still have a game left) are kept "alive".
+function groupStatus(data) {
+  const note   = (data?.note || "").toLowerCase();
+  const played = data?.played ?? 0;
+  // ESPN's note is positional (it tags whoever currently sits 1st/2nd/3rd), so a
+  // place is only *confirmed* once a team has finished all 3 group games — top-2
+  // advance directly, so finishing there guarantees a bracket spot.
+  if (played < 3) return "playing";
+  if (note.includes("eliminated"))                            return "eliminated";
+  if (note.includes("advance to"))                            return "qualified";   // confirmed 1st/2nd
+  if (note.includes("best 8") || note.includes("best eight")) return "contention";  // 3rd, awaiting best-8 cut
+  return "playing";
 }
 
 function eventRoundLabel(event, comp) {
@@ -491,6 +682,7 @@ function processData(standingsJson, fixturesJson) {
         losses:      stats.losses      ?? 0,
         groupPoints: stats.points      ?? 0,
         rank:        stats.rank        ?? 0,
+        note:        entry.note?.description ?? null,
       };
     }
   }
@@ -498,6 +690,7 @@ function processData(standingsJson, fixturesJson) {
   // Build fixture map from ESPN scoreboard
   const teamFixtures = {};
   const events = fixturesJson?.events ?? [];
+  const STAGE_ORDER = ["Group Stage","Round of 32","Round of 16","Quarter-finals","Semi-finals","2nd Place","Winner"];
 
   for (const event of events) {
     const comp = event.competitions?.[0];
@@ -512,10 +705,20 @@ function processData(standingsJson, fixturesJson) {
     const homeGoals = parseInt(home.score ?? "0");
     const awayGoals = parseInt(away.score ?? "0");
     const round   = eventRoundLabel(event, comp);
-    const isGroup = round.toLowerCase().includes("group");
+    const low     = round.toLowerCase();
+    const isGroup = low.includes("group");
+    const isThirdPlace = low.includes("3rd") || low.includes("third");
 
-    const homeResult = homeGoals > awayGoals ? "W" : homeGoals < awayGoals ? "L" : "D";
-    const awayResult = homeResult === "W" ? "L" : homeResult === "L" ? "W" : "D";
+    // Decide W/L/D. In the knockouts a level score is settled by a penalty
+    // shootout, so fall back to ESPN's `winner` flag (same as the bracket view)
+    // — a shootout win counts as a win for the underdog bonus.
+    let homeResult, awayResult;
+    if (homeGoals > awayGoals)      { homeResult = "W"; awayResult = "L"; }
+    else if (homeGoals < awayGoals) { homeResult = "L"; awayResult = "W"; }
+    else if (!isGroup && (home.winner === true || away.winner === true)) {
+      homeResult = home.winner === true ? "W" : "L";
+      awayResult = home.winner === true ? "L" : "W";
+    } else                          { homeResult = "D"; awayResult = "D"; }
 
     if (!teamFixtures[homeNorm]) teamFixtures[homeNorm] = [];
     if (!teamFixtures[awayNorm]) teamFixtures[awayNorm] = [];
@@ -524,8 +727,7 @@ function processData(standingsJson, fixturesJson) {
     teamFixtures[awayNorm].push({ opponentNorm: homeNorm, result: awayResult, round, isGroup });
 
     const stage = normaliseRound(round);
-    if (stage !== "Group Stage") {
-      const STAGE_ORDER = ["Group Stage","Round of 32","Round of 16","Quarter-finals","Semi-finals","2nd Place","Winner"];
+    if (stage !== "Group Stage" && !isThirdPlace) {
       const advancer = homeResult === "W" ? homeNorm : awayNorm;
       const loser    = homeResult === "W" ? awayNorm : homeNorm;
 
@@ -538,6 +740,29 @@ function processData(standingsJson, fixturesJson) {
       }
       if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(teamMap[loser].stage)) {
         teamMap[loser].stage = stage;
+      }
+    }
+  }
+
+  // Credit teams for reaching a knockout round as soon as they have a confirmed
+  // place in the bracket — i.e. a real team name (not a "Group A 2nd Place" /
+  // "Third Place Group…" placeholder) is slotted into the fixture. ESPN only fills
+  // a real team in once its spot is mathematically secured, so this catches teams
+  // that clinch with a group game to spare and confirmed best-8 third-placers.
+  // Placeholder slots aren't in teamMap, so they're skipped automatically.
+  for (const event of events) {
+    const comp = event.competitions?.[0];
+    if (!comp) continue;
+    const label = eventRoundLabel(event, comp).toLowerCase();
+    if (label.includes("3rd") || label.includes("third")) continue; // 3rd-place play-off
+    const stage = normaliseRound(eventRoundLabel(event, comp));
+    if (stage === "Group Stage") continue;
+    for (const c of comp.competitors ?? []) {
+      const norm = normaliseTeamName(c.team?.displayName ?? "");
+      const data = teamMap[norm];
+      if (!data) continue; // placeholder slot — not a confirmed team
+      if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(data.stage)) {
+        data.stage = stage;
       }
     }
   }
@@ -600,12 +825,15 @@ function calcPlayerScore(player, teamMap, teamFixtures) {
     const bonusPts = calcUnderdogBonus([t], teamFixtures).bonus;
     stageTotal += stagePts;
 
+    const gStatus = groupStatus(data);
     teamBreakdown.push({
       name:  t.name,
       tier:  t.tier,
       stage,
+      gStatus,
       pts:   stagePts + bonusPts,
-      active: stage !== "Group Stage" || (data?.played ?? 0) < 3,
+      // "active" = still alive in the tournament (not knocked out of the groups)
+      active: stage !== "Group Stage" || gStatus !== "eliminated",
     });
   }
 
@@ -684,6 +912,7 @@ function renderTeamGrid(scores, teamMap) {
         wins:    data.wins   ?? 0,
         draws:   data.draws  ?? 0,
         losses:  data.losses ?? 0,
+        gStatus: t.gStatus ?? groupStatus(data),
       });
     }
   }
@@ -764,9 +993,23 @@ function applyTeamGrid() {
   }
 
   el.innerHTML = teams.map(t => {
-    const isElim     = t.stage === "Group Stage" && t.played >= 3;
-    const stageCls   = isElim ? "eliminated" : t.pts > 0 ? "in-progress" : "";
-    const stageLabel = isElim ? "Eliminated" : t.stage;
+    const inGroup    = t.stage === "Group Stage";
+    const isElim     = inGroup && t.gStatus === "eliminated";
+    const qualified  = inGroup && t.gStatus === "qualified";
+    const contention = inGroup && t.gStatus === "contention";
+
+    let stageCls, stageLabel;
+    if (isElim) {
+      stageCls = "eliminated"; stageLabel = "Eliminated";
+    } else if (qualified) {
+      stageCls = "in-progress"; stageLabel = "Through to R32";
+    } else if (contention) {
+      stageCls = "in-progress"; stageLabel = "3rd — in contention";
+    } else if (!inGroup) {
+      stageCls = "in-progress"; stageLabel = t.stage;
+    } else {
+      stageCls = t.pts > 0 ? "in-progress" : ""; stageLabel = t.stage;
+    }
     const record     = t.played > 0 ? `${t.mp}MP &middot; ${t.wins}W ${t.draws}D ${t.losses}L` : "Not started";
 
     return `
@@ -1101,6 +1344,108 @@ function renderResults(fixturesJson) {
     </div>`).join("");
 }
 
+// ── Knockout bracket ──────────────────────────────────────────
+
+function collectKnockout(fixturesJson) {
+  const out = {
+    "Round of 32": [], "Round of 16": [], "Quarter-finals": [],
+    "Semi-finals": [], "Final": [],
+  };
+  for (const event of fixturesJson?.events ?? []) {
+    const comp = event.competitions?.[0];
+    if (!comp) continue;
+    const low = eventRoundLabel(event, comp).toLowerCase();
+    if (low.includes("group")) continue;
+    if (low.includes("3rd") || low.includes("third")) continue; // skip 3rd-place play-off
+    let key;
+    if      (low.includes("round of 32") || low.includes("2nd round")) key = "Round of 32";
+    else if (low.includes("round of 16") || low.includes("rd of 16") || low.includes("1st round knockout")) key = "Round of 16";
+    else if (low.includes("quarter")) key = "Quarter-finals";
+    else if (low.includes("semi"))    key = "Semi-finals";
+    else if (low.includes("final"))   key = "Final";
+    else continue;
+    out[key].push(event);
+  }
+  for (const k in out) out[k].sort((a, b) => new Date(a.date) - new Date(b.date));
+  return out;
+}
+
+function padSlots(arr, n) {
+  const out = (arr ?? []).slice(0, n);
+  while (out.length < n) out.push(null);
+  return out;
+}
+
+function bracketTeamRow(competitor, isWin, completed) {
+  if (!competitor) {
+    return `<div class="bk-team"><span class="bk-tn" style="color:var(--muted)">TBD</span></div>`;
+  }
+  const name  = competitor.team.shortDisplayName || competitor.team.displayName;
+  const info  = findTeamInfo(normaliseTeamName(competitor.team.displayName));
+  const color = info?.owner?.color;
+  const flag  = flagImg(competitor.team.displayName);
+  const score = completed ? (competitor.score ?? "") : "";
+  const cls   = isWin ? "win" : (completed ? "lose" : "");
+  return `<div class="bk-team ${cls}">
+    ${flag}
+    <span class="bk-tn"${color ? ` style="color:${color}"` : ""}>${name}</span>
+    <span class="bk-sc">${score}</span>
+  </div>`;
+}
+
+function bracketMatchBox(event) {
+  if (!event) {
+    return `<div class="bk-match"><div class="bk-card tbd">
+      ${bracketTeamRow(null)}
+      ${bracketTeamRow(null)}
+    </div></div>`;
+  }
+  const comp = event.competitions?.[0];
+  const home = comp?.competitors?.find(c => c.homeAway === "home");
+  const away = comp?.competitors?.find(c => c.homeAway === "away");
+  const completed = !!event.status?.type?.completed;
+
+  let homeWin = false, awayWin = false;
+  if (completed) {
+    if (home?.winner === true)      homeWin = true;
+    else if (away?.winner === true) awayWin = true;
+    else {
+      const hg = parseInt(home?.score ?? "0"), ag = parseInt(away?.score ?? "0");
+      if (hg > ag) homeWin = true; else if (ag > hg) awayWin = true;
+    }
+  }
+
+  return `<div class="bk-match"><div class="bk-card">
+    ${bracketTeamRow(home, homeWin, completed)}
+    ${bracketTeamRow(away, awayWin, completed)}
+  </div></div>`;
+}
+
+function renderBracket(fixturesJson) {
+  const ko = collectKnockout(fixturesJson);
+
+  const half = arr => [arr.slice(0, arr.length / 2), arr.slice(arr.length / 2)];
+  const [r32L, r32R] = half(padSlots(ko["Round of 32"],   16));
+  const [r16L, r16R] = half(padSlots(ko["Round of 16"],    8));
+  const [qfL,  qfR ] = half(padSlots(ko["Quarter-finals"], 4));
+  const [sfL,  sfR ] = half(padSlots(ko["Semi-finals"],    2));
+  const fin          = padSlots(ko["Final"], 1);
+
+  const col = (matches, cls) =>
+    `<div class="bk-round ${cls}">${matches.map(bracketMatchBox).join("")}</div>`;
+
+  document.getElementById("bracket-view").innerHTML =
+    col(r32L, "side-left col-pair") +
+    col(r16L, "side-left col-pair col-recv") +
+    col(qfL,  "side-left col-pair col-recv") +
+    col(sfL,  "side-left col-single col-recv") +
+    col(fin,  "col-final") +
+    col(sfR,  "side-right col-single col-recv") +
+    col(qfR,  "side-right col-pair col-recv") +
+    col(r16R, "side-right col-pair col-recv") +
+    col(r32R, "side-right col-pair");
+}
+
 function showSetupWarning(msg) {
   document.getElementById("setup-warning").innerHTML = `
     <div class="setup-banner">
@@ -1130,6 +1475,7 @@ async function loadData() {
     renderTeamGrid(scores, teamMap);
     renderUpcoming(fixturesJson);
     renderResults(fixturesJson);
+    renderBracket(fixturesJson);
 
     state.lastFetched = new Date();
     document.getElementById("last-updated").textContent = `Updated ${state.lastFetched.toLocaleTimeString()}`;
@@ -1165,6 +1511,7 @@ function useDemoData() {
   const scores = CONFIG.PLAYERS.map(p => calcPlayerScore(p, demoTeamMap, demoFixtures));
   renderLeaderboard(scores);
   renderTeamGrid(scores, demoTeamMap);
+  renderBracket({ events: [] });
   renderScoringTable();
   document.getElementById("last-updated").textContent = "Demo mode — add API key to go live";
 }
@@ -1178,7 +1525,7 @@ function switchTab(name, btn) {
 }
 
 // ── Auto-refresh every 5 minutes ──────────────────────────────
-setInterval(loadData, 60 * 60 * 1000);
+setInterval(loadData, 5 * 60 * 1000);
 
 // ── Init ──────────────────────────────────────────────────────
 renderScoringTable();
