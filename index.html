@@ -171,6 +171,25 @@
     border-top: 1px solid var(--border);
   }
   .team-pts-val { font-weight: 700; color: var(--text); }
+  .team-pts-breakdown {
+    display: flex;
+    margin-top: 8px;
+  }
+  .team-pts-breakdown > div {
+    flex: 1;
+    text-align: center;
+    padding: 2px 0;
+  }
+  .team-pts-breakdown > div + div { border-left: 1px solid var(--border); }
+  .team-pts-breakdown .bd-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .team-pts-breakdown .bd-val { font-size: 14px; font-weight: 700; color: var(--text); }
+  .team-pts-breakdown .bd-total .bd-val { color: var(--gold); }
 
   /* ── Tier legend ── */
   .tier-badge {
@@ -651,7 +670,12 @@ function groupStatus(data) {
 }
 
 function eventRoundLabel(event, comp) {
-  return comp?.notes?.[0]?.headline || event.season?.type?.name || event.season?.slug?.replace(/-/g, " ") || "";
+  // Prefer the season slug/type for the round — it's always present and reliable.
+  // ESPN only sets comp.notes[0].headline on penalty-shootout games (e.g. "Paraguay
+  // advance 4-3 on penalties"), so using it first mislabels those games: the event
+  // then matches no round, dropping it from the bracket and zeroing the loser's
+  // knockout-stage points. Fall back to the headline only if the slug is missing.
+  return event.season?.type?.name || event.season?.slug?.replace(/-/g, " ") || comp?.notes?.[0]?.headline || "";
 }
 
 // Determine the tier of a team name from CONFIG
@@ -766,6 +790,8 @@ function processData(standingsJson, fixturesJson) {
       if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(teamMap[loser].stage)) {
         teamMap[loser].stage = stage;
       }
+      // Losing a knockout tie (incl. on penalties) knocks the team out of the bracket.
+      teamMap[loser].eliminated = true;
     }
   }
 
@@ -788,6 +814,31 @@ function processData(standingsJson, fixturesJson) {
       if (!data) continue; // placeholder slot — not a confirmed team
       if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(data.stage)) {
         data.stage = stage;
+      }
+    }
+  }
+
+  // Once the Round of 32 is fully drawn (all 32 slots hold real teams), any team
+  // that finished the group stage but isn't in the bracket has been knocked out.
+  // This catches 3rd-place teams that missed the "best 8" cut — ESPN's standings
+  // note for them can still read "Best 8 advance", so groupStatus alone misses it.
+  const r32Teams = new Set();
+  let r32Drawn = false;
+  for (const event of events) {
+    const comp = event.competitions?.[0];
+    if (!comp || normaliseRound(eventRoundLabel(event, comp)) !== "Round of 32") continue;
+    r32Drawn = true;
+    for (const c of comp.competitors ?? []) {
+      const norm = normaliseTeamName(c.team?.displayName ?? "");
+      if (teamMap[norm]) r32Teams.add(norm);
+      else r32Drawn = false; // a placeholder slot remains — draw not complete
+    }
+  }
+  if (r32Drawn) {
+    for (const norm in teamMap) {
+      const data = teamMap[norm];
+      if (data.stage === "Group Stage" && (data.played ?? 0) >= 3 && !r32Teams.has(norm)) {
+        data.eliminated = true;
       }
     }
   }
@@ -856,9 +907,13 @@ function calcPlayerScore(player, teamMap, teamFixtures) {
       tier:  t.tier,
       stage,
       gStatus,
+      stagePts,
+      bonusPts,
       pts:   stagePts + bonusPts,
       // "active" = still alive in the tournament (not knocked out of the groups)
       active: stage !== "Group Stage" || gStatus !== "eliminated",
+      // Out of the tournament: eliminated in the groups, or lost a knockout tie.
+      eliminated: (stage === "Group Stage" && gStatus === "eliminated") || data?.eliminated === true,
     });
   }
 
@@ -888,7 +943,7 @@ function renderLeaderboard(scores) {
     const rowCls  = rank <= 3 ? `rank-${rank}` : "";
 
     const pills = p.teams.map(t => {
-      const elim = t.stage === "Group Stage" && !t.active;
+      const elim = t.eliminated;
       return `<span class="lb-pill ${elim ? 'eliminated' : 'active'}" style="background:${hexWithAlpha(p.color, 0.1)};color:${p.color};border-color:${hexWithAlpha(p.color, 0.25)}">
         ${t.name}<span class="tier-badge t${t.tier}">${t.tier}</span>
       </span>`;
@@ -931,6 +986,8 @@ function renderTeamGrid(scores, teamMap) {
         color:   p.color,
         stage:   t.stage,
         pts:     t.pts,
+        stagePts: t.stagePts ?? 0,
+        bonusPts: t.bonusPts ?? 0,
         group:   data.group ?? null,
         mp:      data.groupPoints ?? 0,
         played:  data.played ?? 0,
@@ -1046,9 +1103,10 @@ function applyTeamGrid() {
         </div>
         <div class="team-stage-badge ${stageCls}">${stageLabel}</div>
       </div>
-      <div class="team-pts-row">
-        <span class="team-pts-val">${record}</span>
-        <span class="team-pts-val">${t.pts} pts</span>
+      <div class="team-pts-breakdown">
+        <div><div class="bd-label">Bracket</div><div class="bd-val">${t.stagePts}</div></div>
+        <div><div class="bd-label">Underdog</div><div class="bd-val">+${t.bonusPts}</div></div>
+        <div class="bd-total"><div class="bd-label">Total</div><div class="bd-val">${t.pts} pts</div></div>
       </div>
     </div>`;
   }).join("");
@@ -1319,8 +1377,14 @@ function renderResults(fixturesJson) {
 
         const homeGoals  = parseInt(home.score ?? "0");
         const awayGoals  = parseInt(away.score ?? "0");
-        const homeWin    = homeGoals > awayGoals;
-        const awayWin    = awayGoals > homeGoals;
+        // A level knockout score is settled by a penalty shootout, so fall back to
+        // ESPN's `winner` flag — otherwise a shootout winner shows as "no bonus".
+        let homeWin      = homeGoals > awayGoals;
+        let awayWin      = awayGoals > homeGoals;
+        if (!homeWin && !awayWin) {
+          if (home.winner === true)      homeWin = true;
+          else if (away.winner === true) awayWin = true;
+        }
 
         return `
         <div style="background:var(--surface);border:1px solid ${isRelevant ? "rgba(255,255,255,0.13)" : "var(--border)"};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
@@ -1391,8 +1455,68 @@ function collectKnockout(fixturesJson) {
     else continue;
     out[key].push(event);
   }
-  for (const k in out) out[k].sort((a, b) => new Date(a.date) - new Date(b.date));
-  return out;
+  // Order each round by its position in the bracket tree (not by kick-off date),
+  // so every match lines up vertically between the two matches that feed it.
+  return orderBracket(out);
+}
+
+const KO_SEQ = ["Round of 32", "Round of 16", "Quarter-finals", "Semi-finals", "Final"];
+
+// Normalised name of a knockout match's winner (penalty-shootout aware), or null
+// if it hasn't been decided yet.
+function knockoutWinnerNorm(ev) {
+  const comp = ev?.competitions?.[0];
+  const home = comp?.competitors?.find(c => c.homeAway === "home");
+  const away = comp?.competitors?.find(c => c.homeAway === "away");
+  if (!home || !away || !ev?.status?.type?.completed) return null;
+  if (home.winner === true) return normaliseTeamName(home.team.displayName);
+  if (away.winner === true) return normaliseTeamName(away.team.displayName);
+  const hg = parseInt(home.score ?? "0"), ag = parseInt(away.score ?? "0");
+  if (hg > ag) return normaliseTeamName(home.team.displayName);
+  if (ag > hg) return normaliseTeamName(away.team.displayName);
+  return null;
+}
+
+// Re-order the knockout rounds into bracket order. ESPN numbers matches by event
+// id within a round (the "N" in placeholder names like "Round of 16 5 Winner"),
+// so we can rebuild the tree from the Final down: a match's two feeders are found
+// either from a "… N Winner" placeholder or by matching a real team back to the
+// previous-round match it won. A depth-first walk then yields each round top-to-
+// bottom in bracket order (left half first, right half second).
+function orderBracket(byRound) {
+  const rounds = {};
+  for (const k of KO_SEQ) rounds[k] = [...byRound[k]].sort((a, b) => (+a.id) - (+b.id));
+
+  const feederIndex = (prevKey, competitor) => {
+    const name = competitor?.team?.displayName ?? "";
+    const m = name.match(/(\d+)\s+winner\s*$/i);        // "… N Winner" placeholder
+    if (m) return (+m[1]) - 1;                           // 1-based seq → 0-based index
+    const norm = normaliseTeamName(name);
+    return rounds[prevKey].findIndex(ev => knockoutWinnerNorm(ev) === norm);
+  };
+
+  const ordered = {};
+  for (const k of KO_SEQ) ordered[k] = [];
+  const visit = (key, idx) => {
+    const ev = rounds[key]?.[idx] ?? null;
+    ordered[key].push(ev);
+    const prevKey = KO_SEQ[KO_SEQ.indexOf(key) - 1];
+    if (!prevKey) return;                                // Round of 32 = leaves
+    const comp = ev?.competitions?.[0];
+    const home = comp?.competitors?.find(c => c.homeAway === "home");
+    const away = comp?.competitors?.find(c => c.homeAway === "away");
+    visit(prevKey, feederIndex(prevKey, home));          // home feeder = top
+    visit(prevKey, feederIndex(prevKey, away));          // away feeder = bottom
+  };
+
+  if (rounds["Final"].length === 1) {
+    visit("Final", 0);
+    // Only trust the tree walk if it placed every match exactly once.
+    const complete = KO_SEQ.every(k =>
+      new Set(ordered[k].filter(Boolean).map(e => e.id)).size === rounds[k].length);
+    if (complete) return ordered;
+  }
+  return rounds;   // fallback: plain id order (still deterministic)
 }
 
 function padSlots(arr, n) {
