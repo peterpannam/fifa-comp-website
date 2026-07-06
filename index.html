@@ -191,6 +191,45 @@
   .team-pts-breakdown .bd-val { font-size: 14px; font-weight: 700; color: var(--text); }
   .team-pts-breakdown .bd-total .bd-val { color: var(--gold); }
 
+  /* ── Outcomes / title race ── */
+  .outcomes-note {
+    font-size: 12px; color: var(--muted); line-height: 1.7;
+    margin-bottom: 16px; max-width: 720px;
+  }
+  .outcomes-note strong { color: var(--text); font-weight: 600; }
+  .oc-row {
+    display: grid;
+    grid-template-columns: 26px 1fr auto 190px;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .oc-row.is-elim { opacity: 0.5; }
+  .oc-rank { font-size: 14px; font-weight: 700; color: var(--muted); text-align: center; }
+  .oc-name { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .oc-teams { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .oc-team {
+    font-size: 10px; color: var(--muted);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 99px; padding: 1px 7px;
+  }
+  .oc-team.out { color: var(--muted); font-style: italic; }
+  .oc-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 2px 7px; border-radius: 99px;
+  }
+  .oc-badge.elim   { background: rgba(239,68,68,0.15);  color: #f87171; }
+  .oc-badge.clinch { background: rgba(245,158,11,0.18); color: var(--gold); }
+  .oc-nums { display: flex; gap: 14px; text-align: right; }
+  .oc-pts { font-size: 15px; font-weight: 700; color: var(--text); }
+  .oc-pts span { display: block; font-size: 9px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .oc-pts.max { color: var(--muted); }
+  .oc-prob { display: flex; align-items: center; gap: 8px; }
+  .oc-bar { flex: 1; height: 8px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+  .oc-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+  .oc-pct { font-size: 13px; font-weight: 700; color: var(--text); min-width: 46px; text-align: right; }
+
   /* ── Tier legend ── */
   .tier-badge {
     display: inline-block;
@@ -473,6 +512,15 @@
     .team-grid { grid-template-columns: 1fr; }
     .tabs { gap: 5px; }
     .tab-btn { padding: 6px 10px; font-size: 12px; flex: 1 1 auto; }
+    .oc-row {
+      grid-template-columns: 22px 1fr auto;
+      grid-template-areas: "rank main nums" "prob prob prob";
+      gap: 8px 10px;
+    }
+    .oc-rank { grid-area: rank; }
+    .oc-main { grid-area: main; }
+    .oc-nums { grid-area: nums; }
+    .oc-prob { grid-area: prob; }
   }
 </style>
 </head>
@@ -503,6 +551,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('leaderboard', this)">Leaderboard</button>
     <button class="tab-btn" onclick="switchTab('teams', this)">All Teams</button>
+    <button class="tab-btn" onclick="switchTab('outcomes', this)">Outcomes</button>
     <button class="tab-btn" onclick="switchTab('upcoming', this)">Upcoming</button>
     <button class="tab-btn" onclick="switchTab('results', this)">Results</button>
     <button class="tab-btn" onclick="switchTab('bracket', this)">Bracket</button>
@@ -539,6 +588,21 @@
       <div class="team-grid" id="team-grid">
         <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Outcomes tab -->
+  <div class="tab-panel" id="tab-outcomes">
+    <div class="section-title">Title race</div>
+    <p class="outcomes-note">
+      Win chances come from checking <strong>every possible way the bracket can still finish</strong>,
+      treating each remaining match as a 50/50 coin flip. <strong>Now</strong> is a player's locked-in
+      points; <strong>max</strong> is the most they could still reach if every result fell their way.
+      A player is <strong>eliminated</strong> only when they finish top in none of those possible
+      brackets — a mathematical certainty, not just a long shot.
+    </p>
+    <div id="outcomes-list">
+      <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
     </div>
   </div>
 
@@ -1655,6 +1719,272 @@ function renderBracket(fixturesJson) {
     col(r32R, "side-right col-pair");
 }
 
+// ── Outcomes / title race ─────────────────────────────────────
+// Projects how the competition can still finish. When few enough matches remain
+// (≤ 2^20 possible brackets) we enumerate EVERY remaining outcome, which gives
+// exact win probabilities and a complete elimination test (a player is out only
+// if they finish first in none of the possible brackets). Earlier on, when there
+// are too many outcomes, we fall back to Monte Carlo for win chances plus a
+// sufficient elimination test using each player's best-case total.
+
+const OC_LOSER_STAGE = {
+  "Round of 32": "Round of 32", "Round of 16": "Round of 16",
+  "Quarter-finals": "Quarter-finals", "Semi-finals": "Semi-finals", "Final": "2nd Place",
+};
+
+// Build the knockout bracket as a tree of nodes with feeder links + known winners.
+function buildBracketModel(fixturesJson) {
+  const rounds = {};
+  for (const k of KO_SEQ) rounds[k] = [];
+  for (const event of fixturesJson?.events ?? []) {
+    const comp = event.competitions?.[0];
+    if (!comp) continue;
+    const low = eventRoundLabel(event, comp).toLowerCase();
+    if (low.includes("group") || low.includes("3rd") || low.includes("third")) continue;
+    let key;
+    if      (low.includes("round of 32") || low.includes("2nd round")) key = "Round of 32";
+    else if (low.includes("round of 16") || low.includes("rd of 16") || low.includes("1st round knockout")) key = "Round of 16";
+    else if (low.includes("quarter")) key = "Quarter-finals";
+    else if (low.includes("semi"))    key = "Semi-finals";
+    else if (low.includes("final"))   key = "Final";
+    else continue;
+    rounds[key].push(event);
+  }
+  for (const k of KO_SEQ) rounds[k].sort((a, b) => (+a.id) - (+b.id));
+
+  const feederIndex = (prevKey, name) => {
+    const m = (name || "").match(/(\d+)\s+winner\s*$/i);
+    if (m) return (+m[1]) - 1;
+    const norm = normaliseTeamName(name);
+    return rounds[prevKey].findIndex(ev => knockoutWinnerNorm(ev) === norm);
+  };
+
+  const nodes = {};
+  for (const k of KO_SEQ) nodes[k] = rounds[k].map((ev, i) => {
+    const comp = ev.competitions?.[0];
+    const home = comp?.competitors?.find(c => c.homeAway === "home");
+    const away = comp?.competitors?.find(c => c.homeAway === "away");
+    return {
+      round: k, idx: i,
+      homeName: home?.team?.displayName ?? "", awayName: away?.team?.displayName ?? "",
+      completed: !!ev.status?.type?.completed, winner: knockoutWinnerNorm(ev),
+    };
+  });
+  for (const k of KO_SEQ) {
+    const prev = KO_SEQ[KO_SEQ.indexOf(k) - 1];
+    if (!prev) continue;
+    nodes[k].forEach(n => { n.homeFeeder = feederIndex(prev, n.homeName); n.awayFeeder = feederIndex(prev, n.awayName); });
+  }
+  return { nodes, ready: nodes["Final"].length === 1 };
+}
+
+function computeOutcomes(scores, teamMap, fixturesJson) {
+  const teamOwner = {}, teamTier = {};
+  CONFIG.PLAYERS.forEach(p => p.teams.forEach(t => {
+    const n = normaliseTeamName(t.name); teamOwner[n] = p.name; teamTier[n] = t.tier;
+  }));
+  const players = CONFIG.PLAYERS.map(p => p.name);
+  const current = {}, underdogTotal = {}, colorOf = {};
+  scores.forEach(s => { current[s.name] = s.total; underdogTotal[s.name] = s.underdogTotal; colorOf[s.name] = s.color; });
+
+  const { nodes, ready } = buildBracketModel(fixturesJson);
+  if (!ready) return null;
+
+  const prevRound = r => KO_SEQ[KO_SEQ.indexOf(r) - 1];
+
+  // Score every player for one fully-resolved bracket: `reached` maps each team to
+  // its furthest stage, `koBonus` holds each owner's future underdog points.
+  const scoreWorld = (reached, koBonus) => {
+    let max = -1, leaders = [];
+    for (const p of CONFIG.PLAYERS) {
+      let pts = underdogTotal[p.name] + (koBonus[p.name] || 0);
+      for (const t of p.teams) pts += stagePoints(reached[normaliseTeamName(t.name)] ?? "Group Stage");
+      if (pts > max) { max = pts; leaders = [p.name]; }
+      else if (pts === max) leaders.push(p.name);
+    }
+    return leaders;   // co-leaders share the title
+  };
+
+  // Exact best-case per player: DP over the bracket returning, for each match, a
+  // map of "possible winner → most points this player can still bank in that
+  // subtree". Completed matches are forced to their real winner.
+  const maxFor = X => {
+    const xStage = (team, label) => teamOwner[team] === X ? stagePoints(label) : 0;
+    const xUnder = (w, l, completed) => {
+      if (completed || teamOwner[w] !== X) return 0;
+      const wt = teamTier[w], lt = teamTier[l];
+      if (wt != null && lt != null && wt > lt) { const bc = CONFIG.UNDERDOG_BONUS[wt - lt]; return bc ? bc.win : 0; }
+      return 0;
+    };
+    const dp = (round, idx) => {
+      const node = nodes[round][idx];
+      const prev = prevRound(round);
+      const childH = prev ? dp(prev, node.homeFeeder) : new Map([[normaliseTeamName(node.homeName), 0]]);
+      const childA = prev ? dp(prev, node.awayFeeder) : new Map([[normaliseTeamName(node.awayName), 0]]);
+      const res = new Map();
+      const consider = (wMap, lMap) => {
+        for (const [w, wv] of wMap) for (const [l, lv] of lMap) {
+          if (node.completed && w !== node.winner) continue;
+          const val = wv + lv + xStage(l, OC_LOSER_STAGE[round]) + xUnder(w, l, node.completed);
+          if (!res.has(w) || val > res.get(w)) res.set(w, val);
+        }
+      };
+      consider(childH, childA); consider(childA, childH);
+      return res;
+    };
+    const finalMap = dp("Final", 0);
+    let best = -1;
+    for (const [w, v] of finalMap) {
+      const tot = v + (teamOwner[w] === X ? stagePoints("Winner") : 0);
+      if (tot > best) best = tot;
+    }
+    return best + underdogTotal[X];
+  };
+  const maxPossible = {}; players.forEach(p => maxPossible[p] = maxFor(p));
+  const bestOtherMax = X => Math.max(...players.filter(p => p !== X).map(p => maxPossible[p]));
+
+  // Win chances + who can still finish first. Each undecided match is an
+  // independent coin flip, so every remaining bracket has equal probability.
+  const order = [];
+  for (const k of KO_SEQ) nodes[k].forEach(n => order.push(n));
+  const undecided = order.filter(n => !n.completed).length;
+
+  const winPct = {}, eliminated = {};
+
+  if (undecided <= 20) {
+    // Few enough outcomes (≤ 2^20) to enumerate EVERY one — this gives exact win
+    // probabilities and a complete test of who can still be champion (a player is
+    // out only if they top the table in none of the possible brackets).
+    const champWeight = {}; players.forEach(p => champWeight[p] = 0);
+    const winnerOf = {}, reached = {}, koBonus = {};
+    let leaves = 0;
+    const competitors = node => {
+      const prev = prevRound(node.round);
+      return prev
+        ? [winnerOf[prev + "|" + node.homeFeeder], winnerOf[prev + "|" + node.awayFeeder]]
+        : [normaliseTeamName(node.homeName), normaliseTeamName(node.awayName)];
+    };
+    const recurse = i => {
+      if (i === order.length) {
+        leaves++;
+        const champ = winnerOf["Final|0"], prevReached = reached[champ];
+        reached[champ] = "Winner";
+        const leaders = scoreWorld(reached, koBonus);
+        leaders.forEach(p => champWeight[p] += 1 / leaders.length);
+        reached[champ] = prevReached;
+        return;
+      }
+      const node = order[i], [h, a] = competitors(node);
+      const opts = node.completed ? [node.winner] : [h, a];
+      for (const w of opts) {
+        const l = (w === h) ? a : h;
+        winnerOf[node.round + "|" + node.idx] = w;
+        const prevReached = reached[l]; reached[l] = OC_LOSER_STAGE[node.round];
+        let bonusOwner = null, bonusPts = 0;
+        if (!node.completed) {
+          const wt = teamTier[w], lt = teamTier[l];
+          if (wt != null && lt != null && wt > lt) {
+            const bc = CONFIG.UNDERDOG_BONUS[wt - lt];
+            if (bc) { bonusOwner = teamOwner[w]; bonusPts = bc.win; koBonus[bonusOwner] = (koBonus[bonusOwner] || 0) + bonusPts; }
+          }
+        }
+        recurse(i + 1);
+        reached[l] = prevReached;
+        if (bonusOwner) koBonus[bonusOwner] -= bonusPts;
+      }
+    };
+    recurse(0);
+    players.forEach(p => { winPct[p] = 100 * champWeight[p] / leaves; eliminated[p] = champWeight[p] === 0; });
+  } else {
+    // Too many outcomes to enumerate (early knockouts): estimate win chances by
+    // Monte Carlo, and fall back to a sufficient elimination test (a player is out
+    // if even their best case can't reach another player's already-locked total).
+    const N = 20000;
+    const wins = {}; players.forEach(p => wins[p] = 0);
+    for (let s = 0; s < N; s++) {
+      const reached = {}, koBonus = {};
+      const play = (round, idx) => {
+        const node = nodes[round][idx], prev = prevRound(round);
+        const h = prev ? play(prev, node.homeFeeder) : normaliseTeamName(node.homeName);
+        const a = prev ? play(prev, node.awayFeeder) : normaliseTeamName(node.awayName);
+        let w, l;
+        if (node.completed) { w = node.winner; l = (w === h) ? a : h; }
+        else if (Math.random() < 0.5) { w = h; l = a; }
+        else { w = a; l = h; }
+        reached[l] = OC_LOSER_STAGE[round];
+        if (!node.completed) {
+          const wt = teamTier[w], lt = teamTier[l];
+          if (wt != null && lt != null && wt > lt) {
+            const bc = CONFIG.UNDERDOG_BONUS[wt - lt];
+            if (bc) koBonus[teamOwner[w]] = (koBonus[teamOwner[w]] || 0) + bc.win;
+          }
+        }
+        return w;
+      };
+      const champ = play("Final", 0); reached[champ] = "Winner";
+      const leaders = scoreWorld(reached, koBonus);
+      leaders.forEach(p => wins[p] += 1 / leaders.length);
+    }
+    const bestOtherCurrent = X => Math.max(...players.filter(p => p !== X).map(p => current[p]));
+    players.forEach(p => { winPct[p] = 100 * wins[p] / N; eliminated[p] = maxPossible[p] < bestOtherCurrent(p); });
+  }
+
+  return players.map(name => {
+    const player = CONFIG.PLAYERS.find(p => p.name === name);
+    const aliveTeams = player.teams
+      .filter(t => { const d = teamMap[normaliseTeamName(t.name)]; return d && d.stage !== "Group Stage" && !d.eliminated; })
+      .map(t => t.name);
+    return {
+      name, color: colorOf[name],
+      current: current[name], max: maxPossible[name],
+      winPct: winPct[name],
+      eliminated: eliminated[name],
+      clinched: current[name] > bestOtherMax(name),
+      aliveTeams,
+    };
+  });
+}
+
+function renderOutcomes(scores, teamMap, fixturesJson) {
+  const el = document.getElementById("outcomes-list");
+  if (!el) return;
+  const res = computeOutcomes(scores, teamMap, fixturesJson);
+  if (!res) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:20px 0;">The knockout bracket isn't drawn yet — win chances appear once the Round of 32 is set.</div>`;
+    return;
+  }
+  const rows = res.slice().sort((a, b) => b.winPct - a.winPct || b.current - a.current);
+  el.innerHTML = rows.map((p, i) => {
+    const pct = p.winPct;
+    const pctLabel = p.eliminated ? "0%"
+      : pct >= 99.95 ? ">99.9%"
+      : pct > 0 && pct < 0.05 ? "<0.1%"
+      : pct.toFixed(1) + "%";
+    const badge = p.clinched ? `<span class="oc-badge clinch">Clinched</span>`
+      : p.eliminated ? `<span class="oc-badge elim">Eliminated</span>` : "";
+    const teams = p.aliveTeams.length
+      ? p.aliveTeams.map(t => `<span class="oc-team">${t}</span>`).join("")
+      : `<span class="oc-team out">no teams left in</span>`;
+    const fillW = p.eliminated ? 0 : Math.max(pct, 1.5);
+    return `
+    <div class="oc-row${p.eliminated ? " is-elim" : ""}">
+      <div class="oc-rank">${i + 1}</div>
+      <div class="oc-main">
+        <div class="oc-name" style="color:${p.color}">${p.name}${badge}</div>
+        <div class="oc-teams">${teams}</div>
+      </div>
+      <div class="oc-nums">
+        <div class="oc-pts">${p.current}<span>now</span></div>
+        <div class="oc-pts max">${p.max}<span>max</span></div>
+      </div>
+      <div class="oc-prob">
+        <div class="oc-bar"><div class="oc-bar-fill" style="width:${fillW}%;background:${p.color}"></div></div>
+        <div class="oc-pct">${pctLabel}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
 function showSetupWarning(msg) {
   document.getElementById("setup-warning").innerHTML = `
     <div class="setup-banner">
@@ -1682,6 +2012,7 @@ async function loadData() {
 
     renderLeaderboard(scores);
     renderTeamGrid(scores, teamMap);
+    renderOutcomes(scores, teamMap, fixturesJson);
     renderUpcoming(fixturesJson);
     renderResults(fixturesJson);
     renderBracket(fixturesJson);
@@ -1720,6 +2051,7 @@ function useDemoData() {
   const scores = CONFIG.PLAYERS.map(p => calcPlayerScore(p, demoTeamMap, demoFixtures));
   renderLeaderboard(scores);
   renderTeamGrid(scores, demoTeamMap);
+  renderOutcomes(scores, demoTeamMap, { events: [] });
   renderBracket({ events: [] });
   renderScoringTable();
   document.getElementById("last-updated").textContent = "Demo mode — add API key to go live";
