@@ -777,16 +777,13 @@ function processData(standingsJson, fixturesJson) {
     const isGroup = low.includes("group");
     const isThirdPlace = low.includes("3rd") || low.includes("third");
 
-    // Decide W/L/D. In the knockouts a level score is settled by a penalty
-    // shootout, so fall back to ESPN's `winner` flag (same as the bracket view)
-    // — a shootout win counts as a win for the underdog bonus.
+    // Result on the pitch (goals only) — this drives the underdog bonus. A knockout
+    // tie settled on penalties finished level, so it's a draw here and earns no
+    // bonus (underdog draws only score in the group stage).
     let homeResult, awayResult;
     if (homeGoals > awayGoals)      { homeResult = "W"; awayResult = "L"; }
     else if (homeGoals < awayGoals) { homeResult = "L"; awayResult = "W"; }
-    else if (!isGroup && (home.winner === true || away.winner === true)) {
-      homeResult = home.winner === true ? "W" : "L";
-      awayResult = home.winner === true ? "L" : "W";
-    } else                          { homeResult = "D"; awayResult = "D"; }
+    else                            { homeResult = "D"; awayResult = "D"; }
 
     if (!teamFixtures[homeNorm]) teamFixtures[homeNorm] = [];
     if (!teamFixtures[awayNorm]) teamFixtures[awayNorm] = [];
@@ -796,21 +793,28 @@ function processData(standingsJson, fixturesJson) {
 
     const stage = normaliseRound(round);
     if (stage !== "Group Stage" && !isThirdPlace) {
-      const advancer = homeResult === "W" ? homeNorm : awayNorm;
-      const loser    = homeResult === "W" ? awayNorm : homeNorm;
+      // Who advances in the bracket. This is separate from the bonus: a level tie
+      // is settled by the penalty shootout, so fall back to ESPN's winner flag.
+      let advancer = null, loser = null;
+      if (homeResult === "W")        { advancer = homeNorm; loser = awayNorm; }
+      else if (awayResult === "W")   { advancer = awayNorm; loser = homeNorm; }
+      else if (home.winner === true) { advancer = homeNorm; loser = awayNorm; }
+      else if (away.winner === true) { advancer = awayNorm; loser = homeNorm; }
 
-      if (!teamMap[advancer]) teamMap[advancer] = { stage: "Group Stage" };
-      if (!teamMap[loser])    teamMap[loser]    = { stage: "Group Stage" };
+      if (advancer) {
+        if (!teamMap[advancer]) teamMap[advancer] = { stage: "Group Stage" };
+        if (!teamMap[loser])    teamMap[loser]    = { stage: "Group Stage" };
 
-      const advStage = nextStage(stage);
-      if (STAGE_ORDER.indexOf(advStage) > STAGE_ORDER.indexOf(teamMap[advancer].stage)) {
-        teamMap[advancer].stage = advStage;
+        const advStage = nextStage(stage);
+        if (STAGE_ORDER.indexOf(advStage) > STAGE_ORDER.indexOf(teamMap[advancer].stage)) {
+          teamMap[advancer].stage = advStage;
+        }
+        if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(teamMap[loser].stage)) {
+          teamMap[loser].stage = stage;
+        }
+        // Losing a knockout tie (incl. on penalties) knocks the team out of the bracket.
+        teamMap[loser].eliminated = true;
       }
-      if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(teamMap[loser].stage)) {
-        teamMap[loser].stage = stage;
-      }
-      // Losing a knockout tie (incl. on penalties) knocks the team out of the bracket.
-      teamMap[loser].eliminated = true;
     }
   }
 
@@ -1435,14 +1439,12 @@ function applyResults() {
 
         const homeGoals  = parseInt(home.score ?? "0");
         const awayGoals  = parseInt(away.score ?? "0");
-        // A level knockout score is settled by a penalty shootout, so fall back to
-        // ESPN's `winner` flag — otherwise a shootout winner shows as "no bonus".
-        let homeWin      = homeGoals > awayGoals;
-        let awayWin      = awayGoals > homeGoals;
-        if (!homeWin && !awayWin) {
-          if (home.winner === true)      homeWin = true;
-          else if (away.winner === true) awayWin = true;
-        }
+        // Win/loss for the underdog bonus is decided on goals only. A level knockout
+        // tie was settled on penalties — that's a draw here, so it earns no bonus
+        // (underdog draws only score in the groups). The bracket tab shows who
+        // actually advanced.
+        const homeWin    = homeGoals > awayGoals;
+        const awayWin    = awayGoals > homeGoals;
 
         return `
         <div style="background:var(--surface);border:1px solid ${isRelevant ? "rgba(255,255,255,0.13)" : "var(--border)"};border-radius:10px;padding:12px 16px;margin-bottom:8px;">
