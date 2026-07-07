@@ -634,7 +634,7 @@
       <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
     </div>
 
-    <div id="picker-section" style="margin-top:36px;">
+    <!-- <div id="picker-section" style="margin-top:36px;">
       <div class="section-title">What-if bracket picker</div>
       <p class="outcomes-note">
         Tap a team in any <strong>undecided match</strong> to pick them to win it — picks carry
@@ -665,7 +665,7 @@
           <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
         </div>
       </div>
-    </div>
+    </div> -->
   </div>
 
   <!-- Scoring reference tab -->
@@ -2305,22 +2305,22 @@ function pkToggleRewind() {
   if (pkModel) pkRender();
 }
 
-function renderPicker(scores, teamMap, fixturesJson) {
-  pkScores = scores;
-  pkTeamMap = teamMap;
-  const { nodes, ready } = buildBracketModel(fixturesJson);
-  if (!ready) {
-    pkModel = null;
-    document.getElementById("picker-view").innerHTML =
-      `<div style="color:var(--muted);font-size:13px;padding:20px 0;">The knockout bracket isn't drawn yet — the picker appears once the Round of 32 is set.</div>`;
-    document.getElementById("picker-leaderboard").innerHTML = "";
-    document.getElementById("picker-status").textContent = "";
-    return;
-  }
-  pkModel = { nodes };
-  pkPrunePicks();
-  pkRender();
-}
+// function renderPicker(scores, teamMap, fixturesJson) {
+//   pkScores = scores;
+//   pkTeamMap = teamMap;
+//   const { nodes, ready } = buildBracketModel(fixturesJson);
+//   if (!ready) {
+//     pkModel = null;
+//     document.getElementById("picker-view").innerHTML =
+//       `<div style="color:var(--muted);font-size:13px;padding:20px 0;">The knockout bracket isn't drawn yet — the picker appears once the Round of 32 is set.</div>`;
+//     document.getElementById("picker-leaderboard").innerHTML = "";
+//     document.getElementById("picker-status").textContent = "";
+//     return;
+//   }
+//   pkModel = { nodes };
+//   pkPrunePicks();
+//   pkRender();
+// }
 
 document.getElementById("picker-view").addEventListener("click", pkHandleClick);
 
@@ -2352,7 +2352,7 @@ async function loadData() {
     renderLeaderboard(scores);
     renderTeamGrid(scores, teamMap);
     renderOutcomes(scores, teamMap, fixturesJson);
-    renderPicker(scores, teamMap, fixturesJson);
+    // renderPicker(scores, teamMap, fixturesJson);
     renderUpcoming(fixturesJson);
     renderResults(fixturesJson);
     renderBracket(fixturesJson);
