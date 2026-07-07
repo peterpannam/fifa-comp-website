@@ -277,13 +277,15 @@
   .tab-panel.active { display: block; }
 
   /* ── Knockout bracket ── */
-  /* Break the bracket tab out of main's max-width so it can fill the screen */
-  #tab-bracket {
+  /* Break the bracket tab (and the outcomes picker) out of main's max-width */
+  #tab-bracket,
+  #picker-section {
     margin-left: calc(50% - 50vw);
     margin-right: calc(50% - 50vw);
     padding: 0 20px;
   }
-  #tab-bracket > * {
+  #tab-bracket > *,
+  #picker-section > * {
     max-width: 1400px;
     margin-left: auto;
     margin-right: auto;
@@ -361,6 +363,33 @@
     flex-shrink: 0;
   }
   .bk-team.win .bk-sc { color: var(--gold); }
+
+  /* ── Outcomes bracket picker ── */
+  .bk-team.pickable { cursor: pointer; }
+  .bk-team.pickable:hover { background: rgba(255,255,255,0.07); }
+  .bk-team.picked {
+    background: rgba(245,158,11,0.12);
+    box-shadow: inset 2px 0 0 var(--gold);
+  }
+  .bk-team.picked .bk-sc { color: var(--gold); }
+  .bk-team.picked-out { opacity: 0.45; }
+
+  .pk-board { margin-bottom: 20px; }
+  .pk-row {
+    display: grid;
+    grid-template-columns: 26px 1fr auto auto 48px;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pk-rank { font-size: 13px; font-weight: 700; color: var(--muted); text-align: center; }
+  .pk-rank.r1 { color: var(--gold); }
+  .pk-name { font-size: 14px; font-weight: 700; }
+  .pk-delta { font-size: 12px; font-weight: 700; text-align: right; }
+  .pk-delta.up { color: var(--green); }
+  .pk-delta.down { color: var(--red); }
+  .pk-delta.zero { color: var(--muted); }
 
   /* ── Bracket connector lines ── */
   /* LEFT side: lines converge to the right (toward centre) */
@@ -604,6 +633,39 @@
     <div id="outcomes-list">
       <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
     </div>
+
+    <div id="picker-section" style="margin-top:36px;">
+      <div class="section-title">What-if bracket picker</div>
+      <p class="outcomes-note">
+        Tap a team in any <strong>undecided match</strong> to pick them to win it — picks carry
+        through to later rounds, and the projected standings update instantly with stage points
+        plus any underdog win bonuses those picks would earn. Tap a picked team again to clear
+        that match. <strong>Reset to start</strong> rewinds the whole knockout to the Round of 32
+        so you can replay matches that already happened and explore hypothetical timelines.
+      </p>
+      <div class="filter-bar">
+        <span id="picker-status" class="filter-label"></span>
+        <button class="filter-chip" onclick="pkReset()">Reset picks</button>
+        <button class="filter-chip" id="picker-rewind-btn" onclick="pkToggleRewind()">Reset to start</button>
+      </div>
+      <div class="pk-board" id="picker-leaderboard"></div>
+      <div class="bracket-scroll">
+        <div class="bracket-head">
+          <div>R32</div>
+          <div>R16</div>
+          <div>QF</div>
+          <div>SF</div>
+          <div class="head-final">Final</div>
+          <div>SF</div>
+          <div>QF</div>
+          <div>R16</div>
+          <div>R32</div>
+        </div>
+        <div class="bracket" id="picker-view">
+          <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Scoring reference tab -->
@@ -701,6 +763,8 @@
         <div style="color:var(--muted);font-size:13px;padding:20px 0;">Loading…</div>
       </div>
     </div>
+  </div>
+
   <!-- Message board tab -->
   <div class="tab-panel" id="tab-messages">
     <p class="board-intro">
@@ -943,6 +1007,7 @@ function nextStage(stage) {
 
 function calcUnderdogBonus(playerTeams, teamFixtures) {
   let bonus = 0;
+  let groupBonus = 0;   // the group-stage share — the picker's rewind mode keeps only this
   const details = [];
 
   for (const myTeam of playerTeams) {
@@ -962,15 +1027,17 @@ function calcUnderdogBonus(playerTeams, teamFixtures) {
 
       if (f.result === "W") {
         bonus += bonusConfig.win;
+        if (f.isGroup) groupBonus += bonusConfig.win;
         details.push(`+${bonusConfig.win} (${myTeam.name} beat T${oppTier} team)`);
       } else if (f.result === "D" && f.isGroup) {
         bonus += bonusConfig.draw;
+        groupBonus += bonusConfig.draw;
         details.push(`+${bonusConfig.draw} (${myTeam.name} drew T${oppTier} team)`);
       }
     }
   }
 
-  return { bonus, details };
+  return { bonus, groupBonus, details };
 }
 
 // ── Score calculation ─────────────────────────────────────────
@@ -1004,7 +1071,7 @@ function calcPlayerScore(player, teamMap, teamFixtures) {
     });
   }
 
-  const { bonus, details } = calcUnderdogBonus(player.teams, teamFixtures);
+  const { bonus, groupBonus, details } = calcUnderdogBonus(player.teams, teamFixtures);
   underdogTotal = bonus;
 
   return {
@@ -1013,6 +1080,7 @@ function calcPlayerScore(player, teamMap, teamFixtures) {
     total:     stageTotal + underdogTotal,
     stageTotal,
     underdogTotal,
+    underdogGroupTotal: groupBonus,
     teams:     teamBreakdown,
     details,
   };
@@ -1767,6 +1835,7 @@ function buildBracketModel(fixturesJson) {
     return {
       round: k, idx: i,
       homeName: home?.team?.displayName ?? "", awayName: away?.team?.displayName ?? "",
+      homeScore: home?.score ?? "", awayScore: away?.score ?? "",
       completed: !!ev.status?.type?.completed, winner: knockoutWinnerNorm(ev),
     };
   });
@@ -1985,6 +2054,276 @@ function renderOutcomes(scores, teamMap, fixturesJson) {
   }).join("");
 }
 
+// ── What-if bracket picker (Outcomes tab) ─────────────────────
+// Mirrors the bracket tab, but every undecided match is tappable: pick a winner
+// and it flows into the next round. Projected standings re-score each player as
+// if the picked bracket actually happened — stage points for how far each of
+// their teams gets, plus underdog win bonuses the picks would earn. Completed
+// matches are locked to their real result. Picks survive the 5-minute data
+// refresh; a pick is dropped only if its match completes for real or the picked
+// team no longer reaches that match.
+
+let pkModel   = null;   // bracket nodes from buildBracketModel
+let pkPicks   = {};     // "Round|idx" → normalised name of picked winner
+let pkScores  = null;   // latest real player scores
+let pkTeamMap = null;
+let pkRewound = false;  // "reset to start": replay the whole bracket from the R32
+
+const pkPrevRound = r => KO_SEQ[KO_SEQ.indexOf(r) - 1];
+const pkKey = (round, idx) => round + "|" + idx;
+
+// A match is locked to its real result unless we're replaying from the start.
+const pkLocked = node => node.completed && !pkRewound;
+
+// Normalised name of who wins this match: the real winner if it's been played
+// (and not rewound), otherwise the user's pick (or null).
+function pkWinner(round, idx) {
+  const node = pkModel.nodes[round][idx];
+  if (!node) return null;
+  if (pkLocked(node)) return node.winner;
+  return pkPicks[pkKey(round, idx)] ?? null;
+}
+
+// Which team occupies one side of a match: a real team if ESPN has filled the
+// slot, otherwise whoever wins (real or picked) the feeder match — or null.
+// When rewound, real names only count in the R32 (the fixed starting grid);
+// every later slot must be earned through picks.
+function pkSlot(round, idx, side) {
+  const node = pkModel.nodes[round][idx];
+  if (!node) return null;
+  if (!pkRewound || round === "Round of 32") {
+    const norm = normaliseTeamName((side === "home" ? node.homeName : node.awayName) || "");
+    if (norm && pkTeamMap[norm]) return norm;   // real team (placeholders aren't in teamMap)
+  }
+  const prev = pkPrevRound(round);
+  const feeder = side === "home" ? node.homeFeeder : node.awayFeeder;
+  if (!prev || feeder == null || feeder < 0) return null;
+  return pkWinner(prev, feeder);
+}
+
+// Drop picks that are no longer valid. One forward pass is enough: a match's
+// competitors only depend on earlier rounds.
+function pkPrunePicks() {
+  for (const k of KO_SEQ) {
+    pkModel.nodes[k].forEach((node, i) => {
+      const key = pkKey(k, i);
+      if (!(key in pkPicks)) return;
+      if (pkLocked(node)) { delete pkPicks[key]; return; }
+      const pick = pkPicks[key];
+      if (pick !== pkSlot(k, i, "home") && pick !== pkSlot(k, i, "away")) delete pkPicks[key];
+    });
+  }
+}
+
+// Re-score every player as if the picked bracket happened. Normally the
+// baseline is each team's real furthest stage (picks can only push teams
+// further) and only picked matches add underdog bonuses — real ones are inside
+// underdogTotal. Rewound, the knockout is erased: bracket teams restart at the
+// R32, only group-stage underdog bonuses are kept, and every picked match
+// (including ones that really happened) can earn a fresh bonus.
+function pkProjectedScores() {
+  const STAGE_ORDER = ["Group Stage","Round of 32","Round of 16","Quarter-finals","Semi-finals","2nd Place","Winner"];
+  const reached = {};
+  if (!pkRewound) {
+    for (const norm in pkTeamMap) reached[norm] = pkTeamMap[norm].stage ?? "Group Stage";
+  }
+  const raise = (norm, stage) => {
+    if (!norm) return;
+    if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(reached[norm] ?? "Group Stage")) {
+      reached[norm] = stage;
+    }
+  };
+
+  const koBonus = {};
+  for (const k of KO_SEQ) {
+    pkModel.nodes[k].forEach((node, i) => {
+      const h = pkSlot(k, i, "home"), a = pkSlot(k, i, "away");
+      raise(h, OC_LOSER_STAGE[k]);   // being in a match = reaching that round
+      raise(a, OC_LOSER_STAGE[k]);
+      const w = pkWinner(k, i);
+      if (!w) return;
+      if (k === "Final") raise(w, "Winner");
+      if (!pkLocked(node)) {
+        const l = (w === h) ? a : h;
+        const wInfo = findTeamInfo(w), lInfo = l ? findTeamInfo(l) : null;
+        if (wInfo && lInfo && wInfo.tier > lInfo.tier) {
+          const bc = CONFIG.UNDERDOG_BONUS[wInfo.tier - lInfo.tier];
+          if (bc) koBonus[wInfo.owner.name] = (koBonus[wInfo.owner.name] || 0) + bc.win;
+        }
+      }
+    });
+  }
+
+  return pkScores.map(s => {
+    const player = CONFIG.PLAYERS.find(p => p.name === s.name);
+    let stagePts = 0;
+    for (const t of player.teams) {
+      stagePts += stagePoints(reached[normaliseTeamName(t.name)] ?? "Group Stage");
+    }
+    const baseUnderdog = pkRewound ? (s.underdogGroupTotal ?? s.underdogTotal) : s.underdogTotal;
+    const projected = stagePts + baseUnderdog + (koBonus[s.name] || 0);
+    return { name: s.name, color: s.color, now: s.total, projected, delta: projected - s.total };
+  });
+}
+
+function pkDisplayName(norm) {
+  return pkTeamMap[norm]?.apiName ?? norm.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function pkTeamRow(round, idx, side) {
+  const node = pkModel.nodes[round][idx];
+  const norm = pkSlot(round, idx, side);
+  if (!norm) {
+    return `<div class="bk-team"><span class="bk-tn" style="color:var(--muted)">TBD</span></div>`;
+  }
+  const name  = pkDisplayName(norm);
+  const info  = findTeamInfo(norm);
+  const color = info?.owner?.color;
+  const w     = pkWinner(round, idx);
+  const locked = pkLocked(node);
+  let cls = "";
+  if (locked) cls = w === norm ? "win" : "lose";
+  else if (w) cls = w === norm ? "picked" : "picked-out";
+  const pickable = !locked;
+  const sc = locked
+    ? (side === "home" ? node.homeScore : node.awayScore)
+    : (w === norm ? "✓" : "");
+  return `<div class="bk-team ${cls}${pickable ? " pickable" : ""}"${
+    pickable ? ` data-round="${round}" data-idx="${idx}" data-team="${norm}"` : ""}>
+    ${flagImg(name)}
+    <span class="bk-tn"${color ? ` style="color:${color}"` : ""}>${name}</span>
+    <span class="bk-sc">${sc}</span>
+  </div>`;
+}
+
+// Same tree walk as orderBracket, but yielding node indices so the picker's
+// matches line up with their feeders exactly like the bracket tab.
+function pkDisplayOrder() {
+  const nodes = pkModel.nodes;
+  const ordered = {};
+  for (const k of KO_SEQ) ordered[k] = [];
+  const visit = (key, idx) => {
+    ordered[key].push(idx);
+    const prev = pkPrevRound(key);
+    if (!prev) return;
+    const n = idx >= 0 ? nodes[key][idx] : null;
+    visit(prev, n && n.homeFeeder != null ? n.homeFeeder : -1);
+    visit(prev, n && n.awayFeeder != null ? n.awayFeeder : -1);
+  };
+  if (nodes["Final"].length === 1) {
+    visit("Final", 0);
+    const complete = KO_SEQ.every(k =>
+      new Set(ordered[k].filter(i => i >= 0)).size === nodes[k].length);
+    if (complete) return ordered;
+  }
+  const fallback = {};
+  for (const k of KO_SEQ) fallback[k] = nodes[k].map((_, i) => i);
+  return fallback;
+}
+
+function pkRender() {
+  const ord  = pkDisplayOrder();
+  const pad  = (arr, n) => { const o = arr.slice(0, n); while (o.length < n) o.push(-1); return o; };
+  const half = arr => [arr.slice(0, arr.length / 2), arr.slice(arr.length / 2)];
+  const [r32L, r32R] = half(pad(ord["Round of 32"],   16));
+  const [r16L, r16R] = half(pad(ord["Round of 16"],    8));
+  const [qfL,  qfR ] = half(pad(ord["Quarter-finals"], 4));
+  const [sfL,  sfR ] = half(pad(ord["Semi-finals"],    2));
+  const fin          = pad(ord["Final"], 1);
+
+  const box = round => idx => {
+    if (idx < 0 || !pkModel.nodes[round][idx]) {
+      const tbd = `<div class="bk-team"><span class="bk-tn" style="color:var(--muted)">TBD</span></div>`;
+      return `<div class="bk-match"><div class="bk-card tbd">${tbd}${tbd}</div></div>`;
+    }
+    return `<div class="bk-match"><div class="bk-card">${
+      pkTeamRow(round, idx, "home")}${pkTeamRow(round, idx, "away")}</div></div>`;
+  };
+  const col = (round, idxs, cls) =>
+    `<div class="bk-round ${cls}">${idxs.map(box(round)).join("")}</div>`;
+
+  document.getElementById("picker-view").innerHTML =
+    col("Round of 32",   r32L, "side-left col-pair") +
+    col("Round of 16",   r16L, "side-left col-pair col-recv") +
+    col("Quarter-finals", qfL, "side-left col-pair col-recv") +
+    col("Semi-finals",    sfL, "side-left col-single col-recv") +
+    col("Final",          fin, "col-final") +
+    col("Semi-finals",    sfR, "side-right col-single col-recv") +
+    col("Quarter-finals", qfR, "side-right col-pair col-recv") +
+    col("Round of 16",   r16R, "side-right col-pair col-recv") +
+    col("Round of 32",   r32R, "side-right col-pair");
+
+  pkRenderBoard();
+}
+
+function pkRenderBoard() {
+  const openMatches = KO_SEQ.reduce((n, k) => n + pkModel.nodes[k].filter(x => !pkLocked(x)).length, 0);
+  const nPicks = Object.keys(pkPicks).length;
+  document.getElementById("picker-status").textContent =
+    pkRewound        ? `Replaying from the Round of 32 — ${nPicks} of ${openMatches} matches picked`
+    : openMatches === 0 ? "Tournament decided — nothing left to pick"
+                        : `${nPicks} of ${openMatches} remaining matches picked`;
+  const btn = document.getElementById("picker-rewind-btn");
+  if (btn) {
+    btn.textContent = pkRewound ? "Back to live results" : "Reset to start";
+    btn.classList.toggle("active", pkRewound);
+  }
+
+  const rows = pkProjectedScores().sort((a, b) => b.projected - a.projected || b.now - a.now);
+  document.getElementById("picker-leaderboard").innerHTML = rows.map((p, i) => `
+    <div class="pk-row">
+      <div class="pk-rank${i === 0 ? " r1" : ""}">${i + 1}</div>
+      <div class="pk-name" style="color:${p.color}">${p.name}</div>
+      <div class="oc-pts">${p.now}<span>now</span></div>
+      <div class="oc-pts">${p.projected}<span>picked</span></div>
+      <div class="pk-delta ${p.delta > 0 ? "up" : p.delta < 0 ? "down" : "zero"}">${
+        p.delta > 0 ? "+" + p.delta : p.delta < 0 ? "−" + Math.abs(p.delta) : "—"}</div>
+    </div>`).join("");
+}
+
+function pkHandleClick(e) {
+  const row = e.target.closest(".bk-team.pickable");
+  if (!row || !pkModel) return;
+  const key = pkKey(row.dataset.round, +row.dataset.idx);
+  if (pkPicks[key] === row.dataset.team) delete pkPicks[key];
+  else pkPicks[key] = row.dataset.team;
+  pkPrunePicks();
+  pkRender();
+}
+
+function pkReset() {
+  pkPicks = {};
+  if (pkModel) pkRender();
+}
+
+// Toggle "reset to start": rewind the whole bracket to the Round of 32 so every
+// knockout match — including ones already played — can be re-picked, or return
+// to the live bracket. Either way the current picks are cleared.
+function pkToggleRewind() {
+  pkRewound = !pkRewound;
+  pkPicks = {};
+  if (pkModel) pkRender();
+}
+
+function renderPicker(scores, teamMap, fixturesJson) {
+  pkScores = scores;
+  pkTeamMap = teamMap;
+  const { nodes, ready } = buildBracketModel(fixturesJson);
+  if (!ready) {
+    pkModel = null;
+    document.getElementById("picker-view").innerHTML =
+      `<div style="color:var(--muted);font-size:13px;padding:20px 0;">The knockout bracket isn't drawn yet — the picker appears once the Round of 32 is set.</div>`;
+    document.getElementById("picker-leaderboard").innerHTML = "";
+    document.getElementById("picker-status").textContent = "";
+    return;
+  }
+  pkModel = { nodes };
+  pkPrunePicks();
+  pkRender();
+}
+
+document.getElementById("picker-view").addEventListener("click", pkHandleClick);
+
 function showSetupWarning(msg) {
   document.getElementById("setup-warning").innerHTML = `
     <div class="setup-banner">
@@ -2013,6 +2352,7 @@ async function loadData() {
     renderLeaderboard(scores);
     renderTeamGrid(scores, teamMap);
     renderOutcomes(scores, teamMap, fixturesJson);
+    renderPicker(scores, teamMap, fixturesJson);
     renderUpcoming(fixturesJson);
     renderResults(fixturesJson);
     renderBracket(fixturesJson);
@@ -2052,6 +2392,7 @@ function useDemoData() {
   renderLeaderboard(scores);
   renderTeamGrid(scores, demoTeamMap);
   renderOutcomes(scores, demoTeamMap, { events: [] });
+  renderPicker(scores, demoTeamMap, { events: [] });
   renderBracket({ events: [] });
   renderScoringTable();
   document.getElementById("last-updated").textContent = "Demo mode — add API key to go live";
