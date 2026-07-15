@@ -67,13 +67,13 @@ No API key or secrets needed — the site uses ESPN's public API.
 
 **Underdog bonus** — earned per match result when a lower-tier team in your game faces a higher-tier team also in your game:
 
-| Tier gap | Win | Draw (groups only) |
-|----------|-----|--------------------|
+| Tier gap | Win | Draw |
+|----------|-----|------|
 | 1 tier | +2 | +1 |
 | 2 tiers | +4 | +2 |
 | 3 tiers | +6 | +3 |
 
-Underdog bonuses accumulate across the tournament. Stage points are set once at the team's deepest round.
+Underdog bonuses accumulate across the tournament, in the group stage and the knockout bracket alike. Results are judged on goals only, so a knockout tie that finishes level counts as a draw regardless of the shootout. Stage points are set once at the team's deepest round.
 
 ---
 

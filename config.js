@@ -110,7 +110,9 @@ const CONFIG = {
   },
 
   // 3. Underdog bonus — tier difference → [win points, draw points]
-  //    Draws only count in the group stage
+  //    Applies in both the group stage and the knockout bracket. Results are
+  //    judged on goals only: a knockout tie that finishes level is a draw,
+  //    whoever wins the shootout.
   UNDERDOG_BONUS: {
     1: { win: 2, draw: 1 },
     2: { win: 4, draw: 2 },

@@ -689,7 +689,7 @@
           <tr style="background:var(--surface2);">
             <th style="padding:10px 16px;text-align:left;color:var(--muted);font-weight:500;">Tier gap</th>
             <th style="padding:10px 16px;text-align:right;color:var(--muted);font-weight:500;">Win</th>
-            <th style="padding:10px 16px;text-align:right;color:var(--muted);font-weight:500;">Draw (groups only)</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--muted);font-weight:500;">Draw</th>
           </tr>
         </thead>
         <tbody>
@@ -713,7 +713,8 @@
     </div>
     <p style="font-size:12px;color:var(--muted);line-height:1.7;">
       Stage points are based on the furthest round a team reaches — not accumulated per round.<br>
-      Underdog bonuses are earned per match result and accumulate across the tournament.
+      Underdog bonuses are earned per match result and accumulate across the tournament.<br>
+      Bonuses use the result on the pitch: a knockout tie that finishes level counts as a draw, no matter who wins the shootout.
     </p>
   </div>
 
@@ -906,8 +907,8 @@ function processData(standingsJson, fixturesJson) {
     const isThirdPlace = low.includes("3rd") || low.includes("third");
 
     // Result on the pitch (goals only) — this drives the underdog bonus. A knockout
-    // tie settled on penalties finished level, so it's a draw here and earns no
-    // bonus (underdog draws only score in the group stage).
+    // tie settled on penalties finished level, so it counts as a draw here and
+    // earns the draw bonus regardless of who won the shootout.
     let homeResult, awayResult;
     if (homeGoals > awayGoals)      { homeResult = "W"; awayResult = "L"; }
     else if (homeGoals < awayGoals) { homeResult = "L"; awayResult = "W"; }
@@ -1029,9 +1030,9 @@ function calcUnderdogBonus(playerTeams, teamFixtures) {
         bonus += bonusConfig.win;
         if (f.isGroup) groupBonus += bonusConfig.win;
         details.push(`+${bonusConfig.win} (${myTeam.name} beat T${oppTier} team)`);
-      } else if (f.result === "D" && f.isGroup) {
+      } else if (f.result === "D") {
         bonus += bonusConfig.draw;
-        groupBonus += bonusConfig.draw;
+        if (f.isGroup) groupBonus += bonusConfig.draw;
         details.push(`+${bonusConfig.draw} (${myTeam.name} drew T${oppTier} team)`);
       }
     }
@@ -1572,8 +1573,8 @@ function applyResults() {
         const homeGoals  = parseInt(home.score ?? "0");
         const awayGoals  = parseInt(away.score ?? "0");
         // Win/loss for the underdog bonus is decided on goals only. A level knockout
-        // tie was settled on penalties — that's a draw here, so it earns no bonus
-        // (underdog draws only score in the groups). The bracket tab shows who
+        // tie settled on penalties counts as a draw and earns the draw bonus,
+        // regardless of who won the shootout. The bracket tab shows who
         // actually advanced.
         const homeWin    = homeGoals > awayGoals;
         const awayWin    = awayGoals > homeGoals;
@@ -1610,12 +1611,11 @@ function applyResults() {
             const underdogName   = underdogIsHome ? (home.team.shortDisplayName || home.team.displayName) : (away.team.shortDisplayName || away.team.displayName);
             const underdogWon    = underdogIsHome ? homeWin : awayWin;
             const isDraw         = homeGoals === awayGoals;
-            const isGroup        = round.toLowerCase().includes("group");
             const ownerLabel     = underdogOwner ? ` <span style="color:${underdogOwner.color};">(${underdogOwner.name})</span>` : "";
             let earned = "";
-            if (underdogWon)              earned = `<span style="color:var(--gold);font-weight:700;">+${bonus.win}pts</span>`;
-            else if (isDraw && isGroup)   earned = `<span style="color:var(--text);font-weight:600;">+${bonus.draw}pts</span>`;
-            else                          earned = `<span style="color:var(--muted);">no bonus</span>`;
+            if (underdogWon)  earned = `<span style="color:var(--gold);font-weight:700;">+${bonus.win}pts</span>`;
+            else if (isDraw)  earned = `<span style="color:var(--text);font-weight:600;">+${bonus.draw}pts</span>`;
+            else              earned = `<span style="color:var(--muted);">no bonus</span>`;
             return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);">
               <span style="font-weight:600;color:var(--text);">${underdogName}</span>${ownerLabel}<span>underdog &mdash; earned ${earned}</span>
             </div>`;
